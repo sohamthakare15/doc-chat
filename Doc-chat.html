@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doc-Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5; /* Fallback */
+        }
+        .flashcard-container {
+            perspective: 1000px;
+        }
+        .flashcard {
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .flashcard.flipped {
+            transform: rotateY(180deg);
+        }
+        .flashcard-face {
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+        .flashcard-back {
+            transform: rotateY(180deg);
+        }
+        #chat-container::-webkit-scrollbar, #quiz-container-wrapper::-webkit-scrollbar, #summary-content::-webkit-scrollbar {
+            width: 8px;
+        }
+        #chat-container::-webkit-scrollbar-track, #quiz-container-wrapper::-webkit-scrollbar-track, #summary-content::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        #chat-container::-webkit-scrollbar-thumb, #quiz-container-wrapper::-webkit-scrollbar-thumb, #summary-content::-webkit-scrollbar-thumb {
+            background: #a8a8a8;
+            border-radius: 4px;
+        }
+        #chat-container::-webkit-scrollbar-thumb:hover, #quiz-container-wrapper::-webkit-scrollbar-thumb:hover, #summary-content::-webkit-scrollbar-thumb:hover {
+            background: #888;
+        }
+        .prose-styles ul { list-style-position: inside; }
+        .prose-styles ol { list-style-position: inside; }
+        .prose-styles table { width: 100%; border-collapse: collapse; }
+        .prose-styles th, .prose-styles td { border: 1px solid #ddd; padding: 8px; }
+        .prose-styles th { background-color: #f2f2f2; }
+        .quiz-option.correct { 
+            background: linear-gradient(to right, #d1fae5, #a7f3d0);
+            border-color: #10b981; 
+            color: #065f46;
+            font-weight: 600;
+        }
+        .quiz-option.incorrect { 
+            background: linear-gradient(to right, #fee2e2, #fecaca);
+            border-color: #ef4444; 
+            color: #991b1b;
+            font-weight: 600;
+        }
+        .main-gradient-bg {
+             background-image: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        }
+        .button-gradient {
+            background-image: linear-gradient(to right, #4f46e5 0%, #818cf8 51%, #4f46e5 100%);
+            background-size: 200% auto;
+            transition: 0.5s;
+        }
+        .button-gradient:hover {
+            background-position: right center;
+        }
+        .summary-btn.active {
+            background-color: #4f46e5;
+            color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="main-gradient-bg">
+    <div class="min-h-screen text-gray-800">
+        <!-- Header -->
+        <header class="bg-white/80 backdrop-blur-md shadow-lg sticky top-0 z-40">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                <h1 class="text-3xl sm:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 tracking-tight">Doc-Chat</h1>
+                <p class="text-sm sm:text-base text-gray-600 mt-1">Your advanced AI study assistant. Get summaries, create flashcards, and test your knowledge.</p>
+            </div>
+        </header>
+
+        <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Upload Section -->
+            <div id="upload-section" class="w-full max-w-2xl mx-auto bg-white/90 backdrop-blur-lg p-6 sm:p-8 rounded-2xl shadow-xl transition-all duration-300">
+                <h2 class="text-2xl font-semibold text-center mb-2 text-gray-800">Get Started</h2>
+                <p class="text-gray-500 text-center mb-6">Upload a PDF or Image file to begin.</p>
+                <div id="drop-zone" class="flex flex-col items-center justify-center w-full h-48 sm:h-64 border-2 border-dashed border-indigo-300 rounded-xl cursor-pointer bg-indigo-50 hover:bg-indigo-100 hover:border-indigo-500 transition-all duration-300">
+                    <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                        <svg class="w-12 h-12 mb-4 text-indigo-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/></svg>
+                        <p class="mb-2 text-sm text-gray-500"><span class="font-semibold text-indigo-600">Click to upload</span> or drag and drop</p>
+                        <p class="text-xs text-gray-500">PDF or Image (PNG, JPG, WEBP)</p>
+                    </div>
+                    <input id="file-input" type="file" class="hidden" accept=".pdf,image/*">
+                </div>
+                 <div id="file-name" class="text-center mt-4 text-gray-600 font-medium hidden"></div>
+                 <button id="process-button" class="mt-6 w-full text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-300 transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:scale-100 button-gradient" disabled>
+                     Process File
+                 </button>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loading-state" class="text-center p-8 hidden">
+                <div role="status" class="flex flex-col items-center justify-center">
+                    <svg aria-hidden="true" class="w-12 h-12 text-gray-300 animate-spin fill-indigo-600" viewBox="0 0 100 101" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M100 50.5908C100 78.2051 77.6142 100.591 50 100.591C22.3858 100.591 0 78.2051 0 50.5908C0 22.9766 22.3858 0.59082 50 0.59082C77.6142 0.59082 100 22.9766 100 50.5908ZM9.08144 50.5908C9.08144 73.1895 27.4013 91.5094 50 91.5094C72.5987 91.5094 90.9186 73.1895 90.9186 50.5908C90.9186 27.9921 72.5987 9.67226 50 9.67226C27.4013 9.67226 9.08144 27.9921 9.08144 50.5908Z" fill="currentColor"/><path d="M93.9676 39.0409C96.393 38.4038 97.8624 35.9116 97.0079 33.5539C95.2932 28.8227 92.871 24.3692 89.8167 20.348C85.8452 15.1192 80.8826 10.7238 75.2124 7.41289C69.5422 4.10194 63.2754 1.94025 56.7698 1.05124C51.7666 0.367541 46.6976 0.446843 41.7345 1.27873C39.2613 1.69328 37.813 4.19778 38.4501 6.62326C39.0873 9.04874 41.5694 10.4717 44.0505 10.1071C47.8511 9.54855 51.7191 9.52689 55.5402 10.0491C60.8642 10.7766 65.9928 12.5457 70.6331 15.2552C75.2735 17.9648 79.3347 21.5619 82.5849 25.841C84.9175 28.9121 86.7997 32.2913 88.1811 35.8758C89.083 38.2158 91.5421 39.6781 93.9676 39.0409Z" fill="currentFill"/></svg>
+                    <p class="mt-4 text-lg font-semibold text-gray-700">Analyzing your document...</p>
+                    <p id="loading-message" class="text-gray-500">This might take a moment.</p>
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <div id="results-section" class="hidden">
+                <div class="flex flex-col sm:flex-row justify-between sm:items-center mb-6 gap-4">
+                    <h2 class="text-2xl font-bold text-gray-800">Your AI Study Guide</h2>
+                    <button id="start-over-button" class="bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors self-start sm:self-center">Start Over</button>
+                </div>
+
+                <!-- Tabs -->
+                <div class="mb-6">
+                    <div class="border-b border-gray-300">
+                        <nav id="tabs" class="-mb-px flex space-x-6 overflow-x-auto" aria-label="Tabs">
+                            <!-- Tabs will be inserted here by JS -->
+                        </nav>
+                    </div>
+                </div>
+
+                <!-- Tab Content -->
+                <div id="tab-content">
+                    <!-- Summary -->
+                    <div id="summary-content-container" class="tab-panel bg-white/80 backdrop-blur-lg p-6 rounded-2xl shadow-lg">
+                        <div class="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4">
+                             <h3 class="text-xl font-semibold text-gray-800">Smart Summary</h3>
+                             <div id="summary-options" class="flex items-center gap-2 bg-gray-200 p-1 rounded-lg">
+                                 <button class="summary-btn px-3 py-1 text-sm font-semibold text-gray-600 rounded-md transition-colors active" data-level="medium">Medium</button>
+                                 <button class="summary-btn px-3 py-1 text-sm font-semibold text-gray-600 rounded-md transition-colors" data-level="short">Short</button>
+                                 <button class="summary-btn px-3 py-1 text-sm font-semibold text-gray-600 rounded-md transition-colors" data-level="detailed">Detailed</button>
+                             </div>
+                             <button id="read-aloud-button" class="flex items-center gap-2 bg-indigo-100 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-indigo-200 transition-colors">
+                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                                 <span id="read-aloud-text">Read Aloud</span>
+                             </button>
+                        </div>
+                        <div id="summary-content" class="prose prose-styles max-w-none h-96 overflow-y-auto pr-2"></div>
+                    </div>
+
+                    <!-- Q&A -->
+                    <div id="qa-content" class="tab-panel hidden bg-white/80 backdrop-blur-lg rounded-2xl shadow-lg">
+                        <div class="flex flex-col h-[65vh]">
+                            <div class="p-4 border-b border-gray-200">
+                                <label for="tutor-mode" class="block text-sm font-medium text-gray-700 mb-1">AI Tutor Mode</label>
+                                <select id="tutor-mode" class="w-full bg-white border border-gray-300 text-gray-700 py-2 px-3 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+                                    <option value="default">Default Assistant</option>
+                                    <option value="simple">Explain Simply (Like I'm 10)</option>
+                                    <option value="exam">Explain for Exam Prep</option>
+                                </select>
+                            </div>
+                            <div id="chat-container" class="flex-1 overflow-y-auto p-6 space-y-4"></div>
+                            <div class="p-4 border-t border-gray-200 bg-gray-50/80 rounded-b-2xl">
+                                <div class="flex items-center space-x-2">
+                                    <input type="text" id="chat-input" placeholder="Ask a follow-up question..." class="flex-1 w-full px-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                    <button id="chat-submit" class="text-white rounded-full p-2.5 hover:scale-110 transition-transform button-gradient">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-send"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Flashcards -->
+                    <div id="flashcards-content" class="tab-panel hidden">
+                        <div id="flashcards-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+                    </div>
+
+                    <!-- Quiz -->
+                    <div id="quiz-content" class="tab-panel hidden bg-white/80 backdrop-blur-lg p-6 rounded-2xl shadow-lg h-[70vh] flex flex-col">
+                        <div class="flex justify-between items-center mb-4 flex-shrink-0">
+                            <h3 class="text-xl font-semibold text-gray-800">Test Your Knowledge</h3>
+                            <div class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">Score: <span id="quiz-score">0</span></div>
+                        </div>
+                        <div id="quiz-container-wrapper" class="overflow-y-auto flex-grow pr-2">
+                            <div id="quiz-container" class="space-y-6"></div>
+                        </div>
+                        <div id="quiz-footer" class="mt-4 text-center flex-shrink-0 pt-4 border-t border-gray-200">
+                             <div id="quiz-results-container" class="text-center p-4 bg-indigo-50 rounded-lg hidden">
+                                <h4 class="text-2xl font-bold text-indigo-700">Quiz Complete!</h4>
+                                <p class="text-lg mt-2 text-gray-800">Your final score is <span id="final-score" class="font-bold"></span> out of <span id="total-questions" class="font-bold"></span>.</p>
+                                <p id="score-percentage" class="text-3xl font-bold mt-4 text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600"></p>
+                                <p id="feedback-message" class="mt-2 text-gray-600 font-medium"></p>
+                            </div>
+                            <button id="submit-quiz-button" class="hidden text-white font-bold py-3 px-8 rounded-lg transition-all duration-300 transform hover:scale-105 button-gradient">
+                                Finish & See Results
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Error Modal -->
+            <div id="error-modal" class="fixed inset-0 bg-gray-900 bg-opacity-60 overflow-y-auto h-full w-full hidden z-50">
+                <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-2xl bg-white">
+                    <div class="mt-3 text-center">
+                        <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+                            <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                        </div>
+                        <h3 class="text-lg leading-6 font-medium text-gray-900 mt-2">Error</h3>
+                        <div class="mt-2 px-7 py-3">
+                            <p id="error-message" class="text-sm text-gray-500"></p>
+                        </div>
+                        <div class="items-center px-4 py-3">
+                            <button id="close-error-modal" class="px-4 py-2 bg-red-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const processButton = document.getElementById('process-button');
+        const fileNameDisplay = document.getElementById('file-name');
+        
+        const uploadSection = document.getElementById('upload-section');
+        const loadingState = document.getElementById('loading-state');
+        const loadingMessage = document.getElementById('loading-message');
+        const resultsSection = document.getElementById('results-section');
+        
+        const startOverButton = document.getElementById('start-over-button');
+        const readAloudButton = document.getElementById('read-aloud-button');
+        const readAloudText = document.getElementById('read-aloud-text');
+        const summaryContentEl = document.getElementById('summary-content');
+        const tutorModeSelect = document.getElementById('tutor-mode');
+
+        const tabsContainer = document.getElementById('tabs');
+        
+        const errorModal = document.getElementById('error-modal');
+        const errorMessage = document.getElementById('error-message');
+        const closeErrorModal = document.getElementById('close-error-modal');
+
+        // --- State and Config ---
+        const model = 'gemini-2.5-flash-preview-05-20';
+        const apiKey = 'AIzaSyBfhkd0dbA-SBaxAeKYRDmZ-CThh0gmhq8'; 
+
+        let fileContent = null;
+        let fileType = null;
+        let chatHistory = [];
+        let originalTextContext = "";
+        let summaryTextForSpeech = "";
+        let quizScore = 0;
+        let totalQuizQuestions = 0;
+        let markdownConverter = new showdown.Converter({tables: true, strikethrough: true});
+
+        // --- Event Listeners ---
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-indigo-500', 'bg-indigo-100'); });
+        dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.classList.remove('border-indigo-500', 'bg-indigo-100'); });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-indigo-500', 'bg-indigo-100');
+            if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener('change', (e) => { if (e.target.files.length) handleFile(e.target.files[0]); });
+        processButton.addEventListener('click', processFile);
+        startOverButton.addEventListener('click', resetApp);
+        closeErrorModal.addEventListener('click', () => errorModal.classList.add('hidden'));
+        readAloudButton.addEventListener('click', toggleSpeech);
+        document.querySelectorAll('.summary-btn').forEach(btn => {
+            btn.addEventListener('click', handleSummaryOptionClick);
+        });
+
+        // --- File Handling ---
+        function handleFile(file) {
+            if (!file) return;
+            const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+            if (!allowedTypes.includes(file.type)) {
+                showError('Invalid file type. Please upload a PDF or an image.');
+                return;
+            }
+            
+            fileType = file.type === 'application/pdf' ? 'pdf' : 'image';
+            if (fileType === 'image') {
+                const reader = new FileReader();
+                reader.onload = (e) => fileContent = e.target.result.split(',')[1];
+                reader.readAsDataURL(file);
+            } else {
+                fileContent = file;
+            }
+            updateFileUI(file.name);
+        }
+
+        function updateFileUI(name) {
+            fileNameDisplay.textContent = `Selected: ${name}`;
+            fileNameDisplay.classList.remove('hidden');
+            processButton.disabled = false;
+        }
+
+        function resetFileUI() {
+            fileInput.value = '';
+            fileContent = null;
+            fileType = null;
+            fileNameDisplay.textContent = '';
+            fileNameDisplay.classList.add('hidden');
+            processButton.disabled = true;
+        }
+        
+        // --- Main Processing Logic ---
+        async function processFile() {
+            if (!fileContent) { showError('No file selected.'); return; }
+
+            uploadSection.classList.add('hidden');
+            loadingState.classList.remove('hidden');
+            resultsSection.classList.add('hidden');
+
+            try {
+                if (fileType === 'pdf') {
+                    originalTextContext = await extractPdfText(fileContent);
+                }
+                
+                const userPrompt = `You are an expert AI study assistant. Analyze the provided document content. Your tasks are to:
+1.  **Generate a medium-length, well-structured summary** of the key information. Use headings, bullet points, and bold text for clarity. This is the default summary.
+2.  **Create 5-10 flashcards** covering important terms/concepts. Format as a JSON array inside a markdown code block: \`\`\`json\n[{"term": "A", "definition": "Desc of A"}]\n\`\`\`
+3.  **Generate 50 multiple-choice quiz questions** to test understanding. Format as a JSON array inside a markdown code block: \`\`\`json\n[{"question": "Q1?", "options": ["A", "B", "C", "D"], "answer": "A"}]\n\`\`\`
+
+Do not include any text before or after the JSON blocks.
+
+${fileType === 'pdf' ? `Here is the text:\n---\n${originalTextContext.substring(0, 100000)}` : ''}`;
+                
+                const payloadContent = [{ text: userPrompt }];
+                if (fileType === 'image') {
+                    payloadContent.push({ inlineData: { mimeType: 'image/jpeg', data: fileContent } });
+                }
+
+                const responseText = await callGemini(payloadContent, "Processing document and generating your 50-question quiz... this may take a bit longer.");
+                displayResults(responseText);
+
+            } catch (error) {
+                console.error('Processing error:', error);
+                showError(`An error occurred: ${error.message}`);
+                resetApp();
+            } finally {
+                loadingState.classList.add('hidden');
+            }
+        }
+        
+        async function handleSummaryOptionClick(e) {
+            const level = e.target.dataset.level;
+            document.querySelectorAll('.summary-btn').forEach(btn => btn.classList.remove('active'));
+            e.target.classList.add('active');
+            
+            summaryContentEl.innerHTML = '<div class="text-center p-4">Generating new summary...</div>';
+            
+            const prompt = `Based on the provided document text, generate a ${level} summary. It should be well-structured.
+            
+            Here is the text:\n---\n${originalTextContext.substring(0, 100000)}`;
+
+             try {
+                const newSummary = await callGemini([{ text: prompt }], `Generating ${level} summary...`);
+                populateSummary(newSummary);
+            } catch (error) {
+                console.error('Summary regeneration error:', error);
+                showError(`Could not generate the ${level} summary. Please try again.`);
+                summaryContentEl.innerHTML = '<div class="text-center p-4 text-red-500">Failed to load summary.</div>';
+            }
+        }
+
+        async function extractPdfText(file) {
+            const pdfjsLib = window['pdfjs-dist/build/pdf'];
+            pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js`;
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+            let text = '';
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const content = await page.getTextContent();
+                text += content.items.map(item => item.str).join(' ') + '\n';
+            }
+            return text;
+        }
+
+        // --- Gemini API Call ---
+        async function callGemini(parts, message = "Thinking...") {
+            loadingMessage.textContent = message;
+            if (apiKey === 'YOUR_API_KEY_HERE' || !apiKey) {
+                throw new Error("API Key not provided. Please add your Google AI Studio API key to the 'apiKey' variable in the script.");
+            }
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            const payload = { contents: [{ parts }] };
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const responseText = await response.text();
+                if (!responseText) {
+                    throw new Error("Received an empty response from the API. The content may have been blocked due to safety settings.");
+                }
+
+                let result;
+                try {
+                    result = JSON.parse(responseText);
+                } catch (e) {
+                    console.error("Response JSON parse error. Response text:", responseText);
+                    throw new Error("Failed to parse the API response. The format was invalid.");
+                }
+                
+                if (!response.ok) {
+                    const errorMessage = result.error?.message || `API Error: ${response.status}`;
+                    throw new Error(errorMessage);
+                }
+
+                if (result.candidates && result.candidates.length > 0) {
+                    const candidate = result.candidates[0];
+                    if (candidate.finishReason === 'SAFETY') {
+                        throw new Error("The request was blocked for safety reasons. Please try with different content.");
+                    }
+                    if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+                         throw new Error("The API returned an empty response, which can be due to safety filters on the generated content.");
+                    }
+                    return candidate.content.parts[0].text || '';
+                } else {
+                    const blockReason = result.promptFeedback?.blockReason;
+                    if (blockReason) {
+                        throw new Error(`Your request was blocked by the API. Reason: ${blockReason}. Please modify the uploaded content.`);
+                    }
+                    throw new Error("The API returned a valid response but no content. This might be due to the content filters.");
+                }
+            } catch (error) {
+                console.error("API call failed:", error);
+                throw error; // Re-throw to be caught by the calling function
+            }
+        }
+        
+        // --- Display Logic ---
+        function displayResults(responseText) {
+            try {
+                const jsonRegex = /```json\s*([\s\S]*?)\s*```/g;
+                const matches = [...responseText.matchAll(jsonRegex)];
+                
+                let summaryText = responseText.replace(jsonRegex, '').trim();
+                let flashcards = [], quizData = [];
+
+                if (matches.length > 0) {
+                    try { flashcards = JSON.parse(matches[0][1]); } catch (e) { console.error("Flashcard JSON parse error:", e); }
+                }
+                if (matches.length > 1) {
+                     try { quizData = JSON.parse(matches[1][1]); } catch (e) { console.error("Quiz JSON parse error:", e); }
+                }
+
+                setupTabs(flashcards.length > 0, quizData.length > 0);
+                
+                populateSummary(summaryText);
+                if (flashcards.length > 0) populateFlashcards(flashcards);
+                if (quizData.length > 0) populateQuiz(quizData);
+                setupQA();
+                
+                resultsSection.classList.remove('hidden');
+                
+            } catch (error) {
+                console.error("Display results error:", error);
+                showError("Could not parse the AI's response. Please try again.");
+                resetApp();
+            }
+        }
+        
+        function setupTabs(hasFlashcards, hasQuiz) {
+            const tabs = [ { id: 'summary-content-container', name: 'Summary' }, { id: 'qa-content', name: 'Q&A' } ];
+            if (hasFlashcards) tabs.push({ id: 'flashcards-content', name: 'Flashcards' });
+            if (hasQuiz) tabs.push({ id: 'quiz-content', name: 'Quiz' });
+
+            tabsContainer.innerHTML = tabs.map((tab, i) => `
+                <button data-tab="${tab.id}" class="tab-button ${i === 0 ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-2 border-b-2 font-medium text-base transition-all">
+                    ${tab.name}
+                </button>`).join('');
+
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    document.querySelectorAll('.tab-button').forEach(btn => {
+                        btn.classList.remove('border-indigo-500', 'text-indigo-600');
+                        btn.classList.add('border-transparent', 'text-gray-500');
+                    });
+                    e.currentTarget.classList.add('border-indigo-500', 'text-indigo-600');
+                    e.currentTarget.classList.remove('border-transparent', 'text-gray-500');
+                    document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.add('hidden'));
+                    document.getElementById(e.currentTarget.dataset.tab).classList.remove('hidden');
+                });
+            });
+            
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+            document.getElementById(tabs[0].id).classList.remove('hidden');
+        }
+        
+        function populateSummary(text) {
+            summaryTextForSpeech = text.replace(/#|`/g, ''); // Clean for speech
+            summaryContentEl.innerHTML = markdownConverter.makeHtml(text);
+        }
+        
+        function populateFlashcards(cards) {
+            const grid = document.getElementById('flashcards-grid');
+            grid.innerHTML = cards.map(card => `
+                <div class="flashcard-container h-52">
+                    <div class="flashcard relative w-full h-full cursor-pointer rounded-2xl" onclick="this.classList.toggle('flipped')">
+                        <div class="flashcard-face absolute w-full h-full bg-white flex items-center justify-center p-4 text-center rounded-2xl border border-gray-200"><p class="text-lg font-semibold text-gray-800">${card.term}</p></div>
+                        <div class="flashcard-back absolute w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center p-4 text-center rounded-2xl border border-indigo-400"><p class="text-base text-white font-medium">${card.definition}</p></div>
+                    </div>
+                </div>`).join('');
+        }
+
+        function populateQuiz(questions) {
+            const container = document.getElementById('quiz-container');
+            quizScore = 0;
+            totalQuizQuestions = questions.length;
+            document.getElementById('quiz-score').textContent = `0 / ${totalQuizQuestions}`;
+
+            container.innerHTML = questions.map((q, i) => `
+                <div id="question-${i}" class="p-4 border border-gray-200 rounded-xl bg-white/50">
+                    <p class="font-semibold mb-3 text-gray-800">${i + 1}. ${q.question}</p>
+                    <div class="space-y-2">
+                        ${q.options.map(opt => `
+                            <button class="quiz-option block w-full text-left p-3 border-2 border-gray-200 rounded-lg bg-white hover:bg-indigo-50 hover:border-indigo-300 transition-colors" data-question="${i}" data-answer="${q.answer}">
+                                ${opt}
+                            </button>`).join('')}
+                    </div>
+                </div>`).join('');
+            
+            document.getElementById('quiz-results-container').classList.add('hidden');
+            const submitButton = document.getElementById('submit-quiz-button');
+            if (questions.length > 0) {
+                submitButton.classList.remove('hidden');
+                submitButton.onclick = showQuizResults;
+            } else {
+                submitButton.classList.add('hidden');
+            }
+
+            document.querySelectorAll('.quiz-option').forEach(opt => opt.addEventListener('click', checkAnswer));
+        }
+
+        function checkAnswer(e) {
+            const button = e.currentTarget;
+            const questionId = button.dataset.question;
+            const correctAnswer = button.dataset.answer;
+            const selectedAnswer = button.textContent.trim();
+            const questionContainer = document.getElementById(`question-${questionId}`);
+
+            // A simple check to see if the user answered correctly.
+            const isCorrect = selectedAnswer.toLowerCase() === correctAnswer.toLowerCase();
+            
+            if (isCorrect) {
+                 button.classList.add('correct');
+                 quizScore++;
+            } else {
+                 button.classList.add('incorrect');
+                 // Highlight the correct answer
+                 questionContainer.querySelectorAll('.quiz-option').forEach(opt => {
+                     if (opt.textContent.trim().toLowerCase() === correctAnswer.toLowerCase()) {
+                         opt.classList.add('correct');
+                     }
+                 });
+            }
+            
+            document.getElementById('quiz-score').textContent = `${quizScore} / ${totalQuizQuestions}`;
+            // Disable all buttons for this question after an answer is selected
+            questionContainer.querySelectorAll('.quiz-option').forEach(opt => opt.disabled = true);
+        }
+        
+        function showQuizResults() {
+            const resultsContainer = document.getElementById('quiz-results-container');
+            const finalScoreEl = document.getElementById('final-score');
+            const totalQuestionsEl = document.getElementById('total-questions');
+            const percentageEl = document.getElementById('score-percentage');
+            const feedbackEl = document.getElementById('feedback-message');
+            
+            const percentage = totalQuizQuestions > 0 ? Math.round((quizScore / totalQuizQuestions) * 100) : 0;
+
+            finalScoreEl.textContent = quizScore;
+            totalQuestionsEl.textContent = totalQuizQuestions;
+            percentageEl.textContent = `${percentage}%`;
+
+            let message = "";
+            if (percentage >= 90) {
+                message = "Excellent work! You've mastered this topic.";
+            } else if (percentage >= 75) {
+                message = "Great job! You have a strong understanding.";
+            } else if (percentage >= 50) {
+                message = "Good effort. A little more review could be helpful.";
+            } else {
+                message = "Keep practicing! Review the material and try the quiz again.";
+            }
+            feedbackEl.textContent = message;
+
+            resultsContainer.classList.remove('hidden');
+            document.getElementById('submit-quiz-button').classList.add('hidden');
+            resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+
+        // --- Q&A Logic ---
+        function setupQA() {
+            const chatContainer = document.getElementById('chat-container');
+            const chatInput = document.getElementById('chat-input');
+            const chatSubmit = document.getElementById('chat-submit');
+            
+            chatContainer.innerHTML = '<div class="text-center text-gray-500 p-4">Ask a question about your document to get started.</div>';
+            chatHistory = [];
+
+            const handleChatSubmit = async () => {
+                const question = chatInput.value.trim();
+                if (!question) return;
+
+                addChatMessage('user', question);
+                chatInput.value = '';
+                addChatMessage('assistant', 'Thinking...');
+
+                try {
+                    let context = fileType === 'pdf' && originalTextContext ? `Based on the document text:\n---\n${originalTextContext.substring(0, 50000)}\n---\n` : '';
+                    
+                    const tutorMode = tutorModeSelect.value;
+                    let tutorInstruction = "";
+                    if (tutorMode === 'simple') {
+                        tutorInstruction = "Explain the answer in a very simple and concise way, as if you were talking to a 10-year-old.";
+                    } else if (tutorMode === 'exam') {
+                        tutorInstruction = "Explain the answer in a detailed and structured manner, suitable for someone preparing for an exam. Use bullet points or lists if helpful.";
+                    }
+
+                    const systemInstruction = `You are a helpful study assistant. ${context} ${tutorInstruction} Answer the user's question concisely based on the document context. If the answer isn't in the context, say that you cannot find the answer in the document.`;
+
+                    const messages = [...chatHistory.slice(-4), { role: 'user', parts: [{ text: question }] }];
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                    const payload = { contents: messages, systemInstruction: { parts: [{ text: systemInstruction }] } };
+
+                    const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (!response.ok) throw new Error('API Error');
+
+                    const result = await response.json();
+                    const answer = result.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not process that.';
+
+                    updateLastAssistantMessage(answer);
+                    chatHistory.push({ role: 'user', parts: [{ text: question }] }, { role: 'assistant', parts: [{ text: answer }] });
+
+                } catch (error) {
+                    console.error('Chat error:', error);
+                    updateLastAssistantMessage('Sorry, an error occurred. Please try again.');
+                }
+            };
+            
+            chatSubmit.onclick = handleChatSubmit;
+            chatInput.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChatSubmit(); } };
+        }
+
+        function addChatMessage(role, text) {
+            const chatContainer = document.getElementById('chat-container');
+            if (chatContainer.querySelector('div.text-center')) chatContainer.innerHTML = '';
+            const messageElement = document.createElement('div');
+            const isUser = role === 'user';
+            messageElement.className = `flex justify-${isUser ? 'end' : 'start'} ${!isUser ? 'assistant-message' : ''}`;
+            
+            const bubbleClasses = isUser 
+                ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white' 
+                : 'bg-white text-gray-800 shadow-sm';
+
+            messageElement.innerHTML = `<div class="${bubbleClasses} rounded-2xl py-2 px-4 max-w-sm prose prose-styles max-w-none">${markdownConverter.makeHtml(text)}</div>`;
+            chatContainer.appendChild(messageElement);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function updateLastAssistantMessage(text) {
+            const lastMessage = document.querySelector('.assistant-message:last-child div');
+            if (lastMessage) lastMessage.innerHTML = markdownConverter.makeHtml(text);
+            lastMessage.parentElement.parentElement.scrollTop = lastMessage.parentElement.parentElement.scrollHeight;
+        }
+
+        // --- Speech Synthesis ---
+        function toggleSpeech() {
+            if (speechSynthesis.speaking) {
+                speechSynthesis.cancel();
+                readAloudText.textContent = "Read Aloud";
+            } else {
+                if (summaryTextForSpeech) {
+                    const utterance = new SpeechSynthesisUtterance(summaryTextForSpeech);
+                    utterance.onend = () => readAloudText.textContent = "Read Aloud";
+                    speechSynthesis.speak(utterance);
+                    readAloudText.textContent = "Stop Reading";
+                }
+            }
+        }
+
+        // --- Utility Functions ---
+        function resetApp() {
+            speechSynthesis.cancel();
+            uploadSection.classList.remove('hidden');
+            loadingState.classList.add('hidden');
+            resultsSection.classList.add('hidden');
+            resetFileUI();
+            originalTextContext = "";
+            summaryTextForSpeech = "";
+            chatHistory = [];
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorModal.classList.remove('hidden');
+        }
+
+    </script>
+</body>
+</html>
+
