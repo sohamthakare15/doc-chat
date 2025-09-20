@@ -1,722 +1,510 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="scroll-smooth">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Doc-Chat</title>
+    <title>Doc-Chat - AI Study Assistant</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script type="module">
+        // IMPORTANT: Replace with your Firebase project's configuration.
+        const firebaseConfig = {
+            apiKey: "YOUR_FIREBASE_API_KEY",
+            authDomain: "YOUR_FIREBASE_AUTH_DOMAIN",
+            projectId: "YOUR_FIREBASE_PROJECT_ID",
+            storageBucket: "YOUR_FIREBASE_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_FIREBASE_MESSAGING_SENDER_ID",
+            appId: "YOUR_FIREBASE_APP_ID"
+        };
+
+        // Initialize Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        
+        try {
+            const app = initializeApp(firebaseConfig);
+            const auth = getAuth(app);
+            window.auth = auth;
+            window.firebase = {
+                createUserWithEmailAndPassword,
+                signInWithEmailAndPassword,
+                signOut,
+                onAuthStateChanged
+            };
+        } catch (error) {
+            console.error("Firebase initialization error:", error);
+        }
+    </script>
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f0f2f5; /* Fallback */
-        }
-        .flashcard-container {
-            perspective: 1000px;
-        }
-        .flashcard {
-            transition: transform 0.6s;
-            transform-style: preserve-3d;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        .flashcard.flipped {
-            transform: rotateY(180deg);
-        }
-        .flashcard-face {
-            backface-visibility: hidden;
-            -webkit-backface-visibility: hidden;
-        }
-        .flashcard-back {
-            transform: rotateY(180deg);
-        }
-        #chat-container::-webkit-scrollbar, #quiz-container-wrapper::-webkit-scrollbar, #summary-content::-webkit-scrollbar {
-            width: 8px;
-        }
-        #chat-container::-webkit-scrollbar-track, #quiz-container-wrapper::-webkit-scrollbar-track, #summary-content::-webkit-scrollbar-track {
-            background: #f1f1f1;
-        }
-        #chat-container::-webkit-scrollbar-thumb, #quiz-container-wrapper::-webkit-scrollbar-thumb, #summary-content::-webkit-scrollbar-thumb {
-            background: #a8a8a8;
-            border-radius: 4px;
-        }
-        #chat-container::-webkit-scrollbar-thumb:hover, #quiz-container-wrapper::-webkit-scrollbar-thumb:hover, #summary-content::-webkit-scrollbar-thumb:hover {
-            background: #888;
-        }
-        .prose-styles ul { list-style-position: inside; }
-        .prose-styles ol { list-style-position: inside; }
-        .prose-styles table { width: 100%; border-collapse: collapse; }
-        .prose-styles th, .prose-styles td { border: 1px solid #ddd; padding: 8px; }
-        .prose-styles th { background-color: #f2f2f2; }
-        .quiz-option.correct { 
-            background: linear-gradient(to right, #d1fae5, #a7f3d0);
-            border-color: #10b981; 
-            color: #065f46;
-            font-weight: 600;
-        }
-        .quiz-option.incorrect { 
-            background: linear-gradient(to right, #fee2e2, #fecaca);
-            border-color: #ef4444; 
-            color: #991b1b;
-            font-weight: 600;
-        }
-        .main-gradient-bg {
-             background-image: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-        }
-        .button-gradient {
-            background-image: linear-gradient(to right, #4f46e5 0%, #818cf8 51%, #4f46e5 100%);
-            background-size: 200% auto;
-            transition: 0.5s;
-        }
-        .button-gradient:hover {
-            background-position: right center;
-        }
-        .summary-btn.active {
-            background-color: #4f46e5;
-            color: white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
+        body { font-family: 'Inter', sans-serif; color: #334155; }
+        .brand-logo span { color: #4338ca; }
+        .brand-logo-alt span { color: #fb923c; }
+        .nav-link.active { color: #4f46e5; border-bottom: 2px solid #4f46e5; }
+        .hero-section { background-color: #f0f2f5; }
+        .button-primary { background-color: #4f46e5; color: white; transition: background-color 0.3s; }
+        .button-primary:hover { background-color: #4338ca; }
+        .button-secondary { background-color: #fb923c; color: white; transition: background-color 0.3s; }
+        .button-secondary:hover { background-color: #f97316; }
+        .section-title span { border-bottom: 3px solid #fb923c; padding-bottom: 4px; }
+        .feature-icon { background-color: #e0e7ff; color: #4f46e5; }
+        [data-page] { display: none; }
+        [data-page="home"] { display: block; }
+        .modal { display: none; position: fixed; z-index: 50; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
+        .modal-content { background-color: #fefefe; margin: 10% auto; padding: 2rem; border: 1px solid #888; width: 90%; max-width: 400px; border-radius: 1rem; position: relative; }
+        #close-modal { position: absolute; top: 0.75rem; right: 1rem; }
+        .mind-map { position: relative; width: 100%; height: 500px; border: 1px solid #e2e8f0; border-radius: 0.5rem; overflow: hidden; background-color: #f9fafb; }
+        .mind-map-node { position: absolute; padding: 8px 16px; background-color: #fff; border: 2px solid; border-radius: 9999px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); white-space: nowrap; transform: translate(-50%, -50%); }
+        .mind-map-line { position: absolute; background-color: #cbd5e1; transform-origin: 0 0; }
+        .quiz-option.correct { background: #dcfce7; border-color: #22c55e; color: #15803d; }
+        .quiz-option.incorrect { background: #fee2e2; border-color: #ef4444; color: #b91c1c; }
+        .flashcard-container { perspective: 1000px; }
+        .flashcard { transition: transform 0.6s; transform-style: preserve-3d; }
+        .flashcard.flipped { transform: rotateY(180deg); }
+        .flashcard-face { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+        .flashcard-back { transform: rotateY(180deg); }
+        .summary-btn.active { background-color: #4f46e5; color: white; }
     </style>
 </head>
-<body class="main-gradient-bg">
-    <div class="min-h-screen text-gray-800">
+<body class="bg-white">
+    <div id="app-container">
         <!-- Header -->
-        <header class="bg-white/80 backdrop-blur-md shadow-lg sticky top-0 z-40">
-            <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
-                <h1 class="text-3xl sm:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 tracking-tight">Doc-Chat</h1>
-                <p class="text-sm sm:text-base text-gray-600 mt-1">Your advanced AI study assistant. Get summaries, create flashcards, and test your knowledge.</p>
-            </div>
+        <header class="bg-white shadow-sm sticky top-0 z-40">
+            <nav class="container mx-auto px-6 py-4 flex justify-between items-center">
+                <a href="#home" class="nav-button text-2xl font-bold brand-logo">Doc<span>Chat</span></a>
+                <div class="hidden md:flex items-center space-x-8">
+                    <a href="#home" class="nav-button nav-link active pb-1">Home</a>
+                    <a href="#features" class="nav-button nav-link pb-1">Features</a>
+                    <a href="#about" class="nav-button nav-link pb-1">About Us</a>
+                    <a href="#contact" class="nav-button nav-link pb-1">Contact</a>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div id="user-session" class="hidden"><span id="user-email" class="text-sm font-medium"></span><button id="logout-button" class="ml-4 text-sm font-semibold text-indigo-600 hover:text-indigo-800">Logout</button></div>
+                    <div id="auth-buttons">
+                        <button id="login-button" class="text-sm font-semibold hover:text-indigo-600">Login</button>
+                        <button id="signup-button" class="ml-4 text-sm font-bold py-2 px-4 rounded-lg button-primary">Sign Up</button>
+                    </div>
+                </div>
+                <button id="mobile-menu-button" class="md:hidden"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg></button>
+            </nav>
+            <div id="mobile-menu" class="hidden md:hidden px-6 pb-4 space-y-2"><a href="#home" class="block nav-button nav-link active">Home</a><a href="#features" class="block nav-button nav-link">Features</a><a href="#about" class="block nav-button nav-link">About Us</a><a href="#contact" class="block nav-button nav-link">Contact</a></div>
         </header>
 
-        <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <!-- Upload Section -->
-            <div id="upload-section" class="w-full max-w-2xl mx-auto bg-white/90 backdrop-blur-lg p-6 sm:p-8 rounded-2xl shadow-xl transition-all duration-300">
-                <h2 class="text-2xl font-semibold text-center mb-2 text-gray-800">Get Started</h2>
-                <p class="text-gray-500 text-center mb-6">Upload a PDF or Image file to begin.</p>
-                <div id="drop-zone" class="flex flex-col items-center justify-center w-full h-48 sm:h-64 border-2 border-dashed border-indigo-300 rounded-xl cursor-pointer bg-indigo-50 hover:bg-indigo-100 hover:border-indigo-500 transition-all duration-300">
-                    <div class="flex flex-col items-center justify-center pt-5 pb-6">
-                        <svg class="w-12 h-12 mb-4 text-indigo-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/></svg>
-                        <p class="mb-2 text-sm text-gray-500"><span class="font-semibold text-indigo-600">Click to upload</span> or drag and drop</p>
-                        <p class="text-xs text-gray-500">PDF or Image (PNG, JPG, WEBP)</p>
+        <!-- Main Content -->
+        <main>
+            <div data-page="home">
+                <section class="py-20 md:py-32 hero-section">
+                    <div class="container mx-auto px-6 grid md:grid-cols-2 items-center gap-12">
+                        <div>
+                            <h1 class="text-4xl md:text-6xl font-extrabold leading-tight">Where Education Meets <span class="text-indigo-600">Next-Level</span> AI.</h1>
+                            <p class="mt-6 text-lg md:text-xl text-slate-600">Redefining your study process with an All-In-One AI solution. Get summaries, quizzes, flashcards and mind-maps instantly from any document.</p>
+                            <button id="get-started-button" class="mt-10 text-lg font-bold py-4 px-8 rounded-lg button-primary">Get Started Now</button>
+                        </div>
+                        <div><img src="https://placehold.co/600x400/E0E7FF/4F46E5?text=AI+Study+Illustration" alt="AI assisting with studies" class="rounded-lg shadow-xl"></div>
                     </div>
-                    <input id="file-input" type="file" class="hidden" accept=".pdf,image/*">
-                </div>
-                 <div id="file-name" class="text-center mt-4 text-gray-600 font-medium hidden"></div>
-                 <button id="process-button" class="mt-6 w-full text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-300 transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:scale-100 button-gradient" disabled>
-                     Process File
-                 </button>
+                </section>
+                <section class="py-20">
+                    <div class="container mx-auto px-6 text-center">
+                         <h2 class="text-3xl font-bold mb-12 section-title"><span>Our Mission & Vision</span></h2>
+                         <div class="grid md:grid-cols-2 gap-12">
+                            <div class="bg-indigo-600 text-white p-8 rounded-lg shadow-lg"><h3 class="text-2xl font-bold mb-4">Our Vision</h3><p>Empowering educational excellence through seamless integration and innovation.</p></div>
+                            <div class="bg-orange-500 text-white p-8 rounded-lg shadow-lg"><h3 class="text-2xl font-bold mb-4">Our Mission</h3><p>To provide students with innovative AI tools that make learning more effective, accessible, and engaging.</p></div>
+                         </div>
+                    </div>
+                </section>
             </div>
-
-            <!-- Loading State -->
-            <div id="loading-state" class="text-center p-8 hidden">
-                <div role="status" class="flex flex-col items-center justify-center">
-                    <svg aria-hidden="true" class="w-12 h-12 text-gray-300 animate-spin fill-indigo-600" viewBox="0 0 100 101" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M100 50.5908C100 78.2051 77.6142 100.591 50 100.591C22.3858 100.591 0 78.2051 0 50.5908C0 22.9766 22.3858 0.59082 50 0.59082C77.6142 0.59082 100 22.9766 100 50.5908ZM9.08144 50.5908C9.08144 73.1895 27.4013 91.5094 50 91.5094C72.5987 91.5094 90.9186 73.1895 90.9186 50.5908C90.9186 27.9921 72.5987 9.67226 50 9.67226C27.4013 9.67226 9.08144 27.9921 9.08144 50.5908Z" fill="currentColor"/><path d="M93.9676 39.0409C96.393 38.4038 97.8624 35.9116 97.0079 33.5539C95.2932 28.8227 92.871 24.3692 89.8167 20.348C85.8452 15.1192 80.8826 10.7238 75.2124 7.41289C69.5422 4.10194 63.2754 1.94025 56.7698 1.05124C51.7666 0.367541 46.6976 0.446843 41.7345 1.27873C39.2613 1.69328 37.813 4.19778 38.4501 6.62326C39.0873 9.04874 41.5694 10.4717 44.0505 10.1071C47.8511 9.54855 51.7191 9.52689 55.5402 10.0491C60.8642 10.7766 65.9928 12.5457 70.6331 15.2552C75.2735 17.9648 79.3347 21.5619 82.5849 25.841C84.9175 28.9121 86.7997 32.2913 88.1811 35.8758C89.083 38.2158 91.5421 39.6781 93.9676 39.0409Z" fill="currentFill"/></svg>
-                    <p class="mt-4 text-lg font-semibold text-gray-700">Analyzing your document...</p>
-                    <p id="loading-message" class="text-gray-500">This might take a moment.</p>
-                </div>
-            </div>
-
-            <!-- Results Section -->
-            <div id="results-section" class="hidden">
-                <div class="flex flex-col sm:flex-row justify-between sm:items-center mb-6 gap-4">
-                    <h2 class="text-2xl font-bold text-gray-800">Your AI Study Guide</h2>
-                    <button id="start-over-button" class="bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors self-start sm:self-center">Start Over</button>
-                </div>
-
-                <!-- Tabs -->
-                <div class="mb-6">
-                    <div class="border-b border-gray-300">
-                        <nav id="tabs" class="-mb-px flex space-x-6 overflow-x-auto" aria-label="Tabs">
-                            <!-- Tabs will be inserted here by JS -->
-                        </nav>
-                    </div>
-                </div>
-
-                <!-- Tab Content -->
-                <div id="tab-content">
-                    <!-- Summary -->
-                    <div id="summary-content-container" class="tab-panel bg-white/80 backdrop-blur-lg p-6 rounded-2xl shadow-lg">
-                        <div class="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4">
-                             <h3 class="text-xl font-semibold text-gray-800">Smart Summary</h3>
-                             <div id="summary-options" class="flex items-center gap-2 bg-gray-200 p-1 rounded-lg">
-                                 <button class="summary-btn px-3 py-1 text-sm font-semibold text-gray-600 rounded-md transition-colors active" data-level="medium">Medium</button>
-                                 <button class="summary-btn px-3 py-1 text-sm font-semibold text-gray-600 rounded-md transition-colors" data-level="short">Short</button>
-                                 <button class="summary-btn px-3 py-1 text-sm font-semibold text-gray-600 rounded-md transition-colors" data-level="detailed">Detailed</button>
-                             </div>
-                             <button id="read-aloud-button" class="flex items-center gap-2 bg-indigo-100 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-indigo-200 transition-colors">
-                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-                                 <span id="read-aloud-text">Read Aloud</span>
-                             </button>
-                        </div>
-                        <div id="summary-content" class="prose prose-styles max-w-none h-96 overflow-y-auto pr-2"></div>
-                    </div>
-
-                    <!-- Q&A -->
-                    <div id="qa-content" class="tab-panel hidden bg-white/80 backdrop-blur-lg rounded-2xl shadow-lg">
-                        <div class="flex flex-col h-[65vh]">
-                            <div class="p-4 border-b border-gray-200">
-                                <label for="tutor-mode" class="block text-sm font-medium text-gray-700 mb-1">AI Tutor Mode</label>
-                                <select id="tutor-mode" class="w-full bg-white border border-gray-300 text-gray-700 py-2 px-3 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
-                                    <option value="default">Default Assistant</option>
-                                    <option value="simple">Explain Simply (Like I'm 10)</option>
-                                    <option value="exam">Explain for Exam Prep</option>
-                                </select>
-                            </div>
-                            <div id="chat-container" class="flex-1 overflow-y-auto p-6 space-y-4"></div>
-                            <div class="p-4 border-t border-gray-200 bg-gray-50/80 rounded-b-2xl">
-                                <div class="flex items-center space-x-2">
-                                    <input type="text" id="chat-input" placeholder="Ask a follow-up question..." class="flex-1 w-full px-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                                    <button id="chat-submit" class="text-white rounded-full p-2.5 hover:scale-110 transition-transform button-gradient">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-send"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Flashcards -->
-                    <div id="flashcards-content" class="tab-panel hidden">
-                        <div id="flashcards-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
-                    </div>
-
-                    <!-- Quiz -->
-                    <div id="quiz-content" class="tab-panel hidden bg-white/80 backdrop-blur-lg p-6 rounded-2xl shadow-lg h-[70vh] flex flex-col">
-                        <div class="flex justify-between items-center mb-4 flex-shrink-0">
-                            <h3 class="text-xl font-semibold text-gray-800">Test Your Knowledge</h3>
-                            <div class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">Score: <span id="quiz-score">0</span></div>
-                        </div>
-                        <div id="quiz-container-wrapper" class="overflow-y-auto flex-grow pr-2">
-                            <div id="quiz-container" class="space-y-6"></div>
-                        </div>
-                        <div id="quiz-footer" class="mt-4 text-center flex-shrink-0 pt-4 border-t border-gray-200">
-                             <div id="quiz-results-container" class="text-center p-4 bg-indigo-50 rounded-lg hidden">
-                                <h4 class="text-2xl font-bold text-indigo-700">Quiz Complete!</h4>
-                                <p class="text-lg mt-2 text-gray-800">Your final score is <span id="final-score" class="font-bold"></span> out of <span id="total-questions" class="font-bold"></span>.</p>
-                                <p id="score-percentage" class="text-3xl font-bold mt-4 text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600"></p>
-                                <p id="feedback-message" class="mt-2 text-gray-600 font-medium"></p>
-                            </div>
-                            <button id="submit-quiz-button" class="hidden text-white font-bold py-3 px-8 rounded-lg transition-all duration-300 transform hover:scale-105 button-gradient">
-                                Finish & See Results
-                            </button>
-                        </div>
+            <div data-page="features" class="py-20 bg-slate-50">
+                 <div class="container mx-auto px-6">
+                    <div class="text-center mb-16"><h2 class="text-3xl font-bold section-title"><span>Next-Generation Study Tools</span></h2><p class="mt-4 text-lg text-slate-600">Everything you need to excel in your studies.</p></div>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8 text-center">
+                        <div class="bg-white p-8 rounded-xl shadow-md hover:shadow-xl transition-shadow"><div class="h-16 w-16 rounded-full feature-icon flex items-center justify-center mx-auto mb-4"><svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg></div><h3 class="text-xl font-bold">Smart Summaries</h3><p class="mt-2 text-slate-500">Get short, medium, or detailed summaries instantly.</p></div>
+                        <div class="bg-white p-8 rounded-xl shadow-md hover:shadow-xl transition-shadow"><div class="h-16 w-16 rounded-full feature-icon flex items-center justify-center mx-auto mb-4"><svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.546-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div><h3 class="text-xl font-bold">AI Quiz Generator</h3><p class="mt-2 text-slate-500">Test your knowledge with auto-generated quizzes.</p></div>
+                        <div class="bg-white p-8 rounded-xl shadow-md hover:shadow-xl transition-shadow"><div class="h-16 w-16 rounded-full feature-icon flex items-center justify-center mx-auto mb-4"><svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg></div><h3 class="text-xl font-bold">Interactive Flashcards</h3><p class="mt-2 text-slate-500">Flip through key terms and definitions.</p></div>
+                        <div class="bg-white p-8 rounded-xl shadow-md hover:shadow-xl transition-shadow"><div class="h-16 w-16 rounded-full feature-icon flex items-center justify-center mx-auto mb-4"><svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a2 2 0 01-2-2V7a2 2 0 012-2h6l2-2h4l-2 2z"></path></svg></div><h3 class="text-xl font-bold">AI Tutor Mode</h3><p class="mt-2 text-slate-500">Ask questions and get simple or detailed explanations.</p></div>
+                        <div class="bg-white p-8 rounded-xl shadow-md hover:shadow-xl transition-shadow"><div class="h-16 w-16 rounded-full feature-icon flex items-center justify-center mx-auto mb-4"><svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"></path></svg></div><h3 class="text-xl font-bold">Mind Map Generator</h3><p class="mt-2 text-slate-500">Visualize key concepts and their connections.</p></div>
+                        <div class="bg-white p-8 rounded-xl shadow-md hover:shadow-xl transition-shadow"><div class="h-16 w-16 rounded-full feature-icon flex items-center justify-center mx-auto mb-4"><svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg></div><h3 class="text-xl font-bold">Export to PDF</h3><p class="mt-2 text-slate-500">Save your summaries and quizzes for offline study.</p></div>
                     </div>
                 </div>
             </div>
-            
-            <!-- Error Modal -->
-            <div id="error-modal" class="fixed inset-0 bg-gray-900 bg-opacity-60 overflow-y-auto h-full w-full hidden z-50">
-                <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-2xl bg-white">
-                    <div class="mt-3 text-center">
-                        <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
-                            <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                        </div>
-                        <h3 class="text-lg leading-6 font-medium text-gray-900 mt-2">Error</h3>
-                        <div class="mt-2 px-7 py-3">
-                            <p id="error-message" class="text-sm text-gray-500"></p>
-                        </div>
-                        <div class="items-center px-4 py-3">
-                            <button id="close-error-modal" class="px-4 py-2 bg-red-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300">
-                                Close
-                            </button>
-                        </div>
+            <div data-page="about" class="py-20 bg-white">
+                <div class="container mx-auto px-6">
+                    <div class="text-center mb-16"><h2 class="text-3xl font-bold section-title"><span>About The Project</span></h2><p class="mt-4 text-lg text-slate-600 max-w-3xl mx-auto">Doc-Chat was born from a passion for learning and technology. As students, we wanted to build a tool that could genuinely help others study more effectively.</p></div>
+                    <div class="text-center mb-16"><h3 class="text-3xl font-bold section-title"><span>Meet the Developers</span></h3></div>
+                    <div class="max-w-4xl mx-auto grid md:grid-cols-2 gap-12">
+                        <div class="bg-slate-50 rounded-lg shadow-lg p-8 text-center hover:shadow-xl transition-shadow"><img class="w-24 h-24 rounded-full mx-auto mb-4 border-4 border-white" src="https://placehold.co/200x200/E0E7FF/4F46E5?text=ST" alt="Soham Thakare"><h4 class="text-xl font-bold">Soham Thakare</h4><p class="text-indigo-600 font-semibold">Backend Developer</p><p class="mt-4 text-slate-500 text-sm">Soham engineered the powerful backend, integrating the AI models and ensuring the application's logic is fast, reliable, and scalable.</p><p class="text-xs text-slate-400 mt-4 font-medium tracking-wider uppercase">Jagadambha College of Engineering and Technology</p></div>
+                        <div class="bg-slate-50 rounded-lg shadow-lg p-8 text-center hover:shadow-xl transition-shadow"><img class="w-24 h-24 rounded-full mx-auto mb-4 border-4 border-white" src="https://placehold.co/200x200/FEF3C7/FB923C?text=ID" alt="Ishwari Dambhe"><h4 class="text-xl font-bold">Ishwari Dambhe</h4><p class="text-indigo-600 font-semibold">Frontend Developer</p><p class="mt-4 text-slate-500 text-sm">Ishwari designed and developed the beautiful and intuitive user interface, ensuring a seamless and enjoyable experience for every student.</p><p class="text-xs text-slate-400 mt-4 font-medium tracking-wider uppercase">Jagadambha College of Engineering and Technology</p></div>
                     </div>
                 </div>
             </div>
+            <div data-page="contact" class="py-20 bg-slate-50">
+                <div class="container mx-auto px-6 text-center"><h2 class="text-3xl font-bold section-title"><span>Get In Touch</span></h2><p class="mt-4 text-lg text-slate-600">Have questions or feedback? We'd love to hear from you.</p><a href="mailto:docchataiassistant@gmail.com" class="mt-8 inline-block text-lg font-bold py-3 px-8 rounded-lg button-primary">Contact Us</a></div>
+            </div>
+            <div data-page="app" class="container mx-auto px-4 sm:px-6 lg:px-8 py-8"><div id="main-app-content"></div></div>
         </main>
+
+        <!-- Footer -->
+        <footer class="bg-slate-800 text-white">
+            <div class="container mx-auto px-6 py-12 grid md:grid-cols-3 gap-8">
+                <div><h3 class="text-xl font-bold brand-logo-alt">Doc<span>Chat</span></h3><p class="mt-4 text-slate-400">The all-in-one AI platform to study smarter, not harder.</p></div>
+                <div><h3 class="text-lg font-semibold">Quick Links</h3><ul class="mt-4 space-y-2"><li class="text-slate-400 hover:text-white transition-colors"><a href="#home" class="nav-button">Home</a></li><li class="text-slate-400 hover:text-white transition-colors"><a href="#features" class="nav-button">Features</a></li><li class="text-slate-400 hover:text-white transition-colors"><a href="#about" class="nav-button">About Us</a></li></ul></div>
+                <div><h3 class="text-lg font-semibold">Get In Touch</h3><p class="mt-4 text-slate-400">Have questions or feedback?</p><a href="mailto:docchataiassistant@gmail.com" class="mt-2 inline-block text-orange-400 hover:text-orange-300 transition-colors">docchataiassistant@gmail.com</a></div>
+            </div>
+            <div class="bg-slate-900 py-4"><p class="text-center text-sm text-slate-500">&copy; 2025 Doc-Chat. All Rights Reserved.</p></div>
+        </footer>
     </div>
 
+    <!-- Modals & Templates -->
+    <div id="auth-modal" class="modal">
+        <div class="modal-content">
+            <span id="close-modal" class="text-gray-500 cursor-pointer text-2xl">&times;</span>
+            <div id="login-form">
+                <h2 class="text-2xl font-bold text-center mb-6">Login</h2>
+                <input id="login-email" class="w-full p-3 mb-4 border rounded-lg" type="email" placeholder="Email">
+                <input id="login-password" class="w-full p-3 mb-4 border rounded-lg" type="password" placeholder="Password">
+                <button id="login-submit" class="w-full text-white font-bold py-3 rounded-lg button-primary">Login</button>
+                <p class="text-center text-sm mt-4">Don't have an account? <a href="#" id="show-signup" class="text-indigo-600 font-semibold">Sign Up</a></p>
+            </div>
+            <div id="signup-form" style="display: none;">
+                <h2 class="text-2xl font-bold text-center mb-6">Sign Up</h2>
+                <input id="signup-email" class="w-full p-3 mb-4 border rounded-lg" type="email" placeholder="Email">
+                <input id="signup-password" class="w-full p-3 mb-4 border rounded-lg" type="password" placeholder="Password">
+                <button id="signup-submit" class="w-full text-white font-bold py-3 rounded-lg button-primary">Sign Up</button>
+                <p class="text-center text-sm mt-4">Already have an account? <a href="#" id="show-login" class="text-indigo-600 font-semibold">Login</a></p>
+            </div>
+            <p id="auth-error" class="text-red-500 text-sm text-center mt-4"></p>
+        </div>
+    </div>
+    <div id="error-modal" class="modal">
+        <div class="modal-content">
+            <div class="text-center">
+                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+                    <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                </div>
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mt-2">Error</h3>
+                <div class="mt-2 px-7 py-3">
+                    <p id="error-message" class="text-sm text-gray-500"></p>
+                </div>
+                <div class="items-center px-4 py-3">
+                    <button id="close-error-modal" class="px-4 py-2 bg-red-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-red-600">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <template id="upload-template">
+        <div id="upload-section" class="w-full max-w-2xl mx-auto bg-white p-6 sm:p-8 rounded-2xl shadow-xl mt-12">
+            <h2 class="text-2xl font-semibold text-center mb-2 text-gray-800">Upload Your Document</h2>
+            <p class="text-slate-500 text-center mb-6">PDF or Image files are supported.</p>
+            <div id="drop-zone" class="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-indigo-300 rounded-xl cursor-pointer bg-slate-50 hover:bg-indigo-100 transition-colors">
+                <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                    <svg class="w-12 h-12 mb-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M12 15l-4-4m0 0l4-4m-4 4h12"/></svg>
+                    <p class="mb-2 text-sm text-slate-500"><span class="font-semibold text-indigo-600">Click to upload</span> or drag and drop</p>
+                </div>
+                <input id="file-input" type="file" class="hidden" accept=".pdf,image/*">
+            </div>
+            <div id="file-name" class="text-center mt-4 text-slate-600 font-medium hidden"></div>
+            <div class="mt-6">
+                <label for="api-key-input" class="block text-sm font-medium text-slate-700 mb-1">Your Gemini API Key</label>
+                <div class="flex items-center space-x-2">
+                    <input type="password" id="api-key-input" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter your API key">
+                    <button id="toggle-key-visibility" class="p-2 rounded-lg hover:bg-slate-100">
+                        <svg id="eye-open" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        <svg id="eye-closed" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                    </button>
+                </div>
+                <p class="mt-2 text-xs text-slate-500">Get a free key from <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-indigo-600 hover:underline">Google AI Studio</a>. Your key is saved locally.</p>
+            </div>
+            <button id="process-button" class="mt-6 w-full font-bold py-3 px-4 rounded-lg button-primary disabled:opacity-50" disabled>Process File</button>
+        </div>
+        <div id="loading-state" class="text-center p-8 hidden"><svg aria-hidden="true" class="inline w-12 h-12 text-slate-300 animate-spin fill-indigo-600" viewBox="0 0 100 101" fill="none"><path d="M100 50.5908C100 78.2051 77.6142 100.591 50 100.591C22.3858 100.591 0 78.2051 0 50.5908C0 22.9766 22.3858 0.59082 50 0.59082C77.6142 0.59082 100 22.9766 100 50.5908ZM9.08144 50.5908C9.08144 73.1895 27.4013 91.5094 50 91.5094C72.5987 91.5094 90.9186 73.1895 90.9186 50.5908C90.9186 27.9921 72.5987 9.67226 50 9.67226C27.4013 9.67226 9.08144 27.9921 9.08144 50.5908Z" fill="currentColor"/><path d="M93.9676 39.0409C96.393 38.4038 97.8624 35.9116 97.0079 33.5539C95.2932 28.8227 92.871 24.3692 89.8167 20.348C85.8452 15.1192 80.8826 10.7238 75.2124 7.41289C69.5422 4.10194 63.2754 1.94025 56.7698 1.05124C51.7666 0.367541 46.6976 0.446843 41.7345 1.27873C39.2613 1.69328 37.813 4.19778 38.4501 6.62326C39.0873 9.04874 41.5694 10.4717 44.0505 10.1071C47.8511 9.54855 51.7191 9.52689 55.5402 10.0491C60.8642 10.7766 65.9928 12.5457 70.6331 15.2552C75.2735 17.9648 79.3347 21.5619 82.5849 25.841C84.9175 28.9121 86.7997 32.2913 88.1811 35.8758C89.083 38.2158 91.5421 39.6781 93.9676 39.0409Z" fill="currentFill"/></svg><p class="mt-4 text-lg font-semibold text-slate-700">Analyzing...</p><p id="loading-message" class="text-slate-500"></p></div>
+    </template>
+    <template id="results-template">
+        <div id="results-section">
+            <div class="flex flex-col sm:flex-row justify-between sm:items-center mb-6 gap-4">
+                <h2 class="text-2xl md:text-3xl font-bold text-slate-800">Your AI Study Guide</h2>
+                <button id="start-over-button" class="bg-slate-200 text-slate-700 font-bold py-2 px-4 rounded-lg hover:bg-slate-300 transition-colors self-start sm:self-center">Start Over</button>
+            </div>
+            <div class="mb-6"><div class="border-b border-slate-300"><nav id="tabs" class="-mb-px flex space-x-6 overflow-x-auto" aria-label="Tabs"></nav></div></div>
+            <div id="tab-content"></div>
+        </div>
+    </template>
+
     <script>
-        // --- DOM Elements ---
-        const dropZone = document.getElementById('drop-zone');
-        const fileInput = document.getElementById('file-input');
-        const processButton = document.getElementById('process-button');
-        const fileNameDisplay = document.getElementById('file-name');
-        
-        const uploadSection = document.getElementById('upload-section');
-        const loadingState = document.getElementById('loading-state');
-        const loadingMessage = document.getElementById('loading-message');
-        const resultsSection = document.getElementById('results-section');
-        
-        const startOverButton = document.getElementById('start-over-button');
-        const readAloudButton = document.getElementById('read-aloud-button');
-        const readAloudText = document.getElementById('read-aloud-text');
-        const summaryContentEl = document.getElementById('summary-content');
-        const tutorModeSelect = document.getElementById('tutor-mode');
+        document.addEventListener('DOMContentLoaded', () => {
+            const model = 'gemini-2.5-flash-preview-05-20';
+            let fileContent = null, fileType = null, originalTextContext = "", summaryTextForSpeech = "", chatHistory = [], quizScore = 0, totalQuizQuestions = 0;
+            const markdownConverter = new showdown.Converter({tables: true, strikethrough: true});
+            const { jsPDF } = window.jspdf;
+            const mainAppContent = document.getElementById('main-app-content'), pages = document.querySelectorAll('[data-page]'), navLinks = document.querySelectorAll('.nav-link');
+            const mobileMenuButton = document.getElementById('mobile-menu-button'), mobileMenu = document.getElementById('mobile-menu');
 
-        const tabsContainer = document.getElementById('tabs');
-        
-        const errorModal = document.getElementById('error-modal');
-        const errorMessage = document.getElementById('error-message');
-        const closeErrorModal = document.getElementById('close-error-modal');
-
-        // --- State and Config ---
-        const model = 'gemini-2.5-flash-preview-05-20';
-        const apiKey = 'AIzaSyBfhkd0dbA-SBaxAeKYRDmZ-CThh0gmhq8'; 
-
-        let fileContent = null;
-        let fileType = null;
-        let chatHistory = [];
-        let originalTextContext = "";
-        let summaryTextForSpeech = "";
-        let quizScore = 0;
-        let totalQuizQuestions = 0;
-        let markdownConverter = new showdown.Converter({tables: true, strikethrough: true});
-
-        // --- Event Listeners ---
-        dropZone.addEventListener('click', () => fileInput.click());
-        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-indigo-500', 'bg-indigo-100'); });
-        dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.classList.remove('border-indigo-500', 'bg-indigo-100'); });
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('border-indigo-500', 'bg-indigo-100');
-            if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
-        });
-        fileInput.addEventListener('change', (e) => { if (e.target.files.length) handleFile(e.target.files[0]); });
-        processButton.addEventListener('click', processFile);
-        startOverButton.addEventListener('click', resetApp);
-        closeErrorModal.addEventListener('click', () => errorModal.classList.add('hidden'));
-        readAloudButton.addEventListener('click', toggleSpeech);
-        document.querySelectorAll('.summary-btn').forEach(btn => {
-            btn.addEventListener('click', handleSummaryOptionClick);
-        });
-
-        // --- File Handling ---
-        function handleFile(file) {
-            if (!file) return;
-            const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-            if (!allowedTypes.includes(file.type)) {
-                showError('Invalid file type. Please upload a PDF or an image.');
-                return;
-            }
-            
-            fileType = file.type === 'application/pdf' ? 'pdf' : 'image';
-            if (fileType === 'image') {
-                const reader = new FileReader();
-                reader.onload = (e) => fileContent = e.target.result.split(',')[1];
-                reader.readAsDataURL(file);
-            } else {
-                fileContent = file;
-            }
-            updateFileUI(file.name);
-        }
-
-        function updateFileUI(name) {
-            fileNameDisplay.textContent = `Selected: ${name}`;
-            fileNameDisplay.classList.remove('hidden');
-            processButton.disabled = false;
-        }
-
-        function resetFileUI() {
-            fileInput.value = '';
-            fileContent = null;
-            fileType = null;
-            fileNameDisplay.textContent = '';
-            fileNameDisplay.classList.add('hidden');
-            processButton.disabled = true;
-        }
-        
-        // --- Main Processing Logic ---
-        async function processFile() {
-            if (!fileContent) { showError('No file selected.'); return; }
-
-            uploadSection.classList.add('hidden');
-            loadingState.classList.remove('hidden');
-            resultsSection.classList.add('hidden');
-
-            try {
-                if (fileType === 'pdf') {
-                    originalTextContext = await extractPdfText(fileContent);
-                }
-                
-                const userPrompt = `You are an expert AI study assistant. Analyze the provided document content. Your tasks are to:
-1.  **Generate a medium-length, well-structured summary** of the key information. Use headings, bullet points, and bold text for clarity. This is the default summary.
-2.  **Create 5-10 flashcards** covering important terms/concepts. Format as a JSON array inside a markdown code block: \`\`\`json\n[{"term": "A", "definition": "Desc of A"}]\n\`\`\`
-3.  **Generate 50 multiple-choice quiz questions** to test understanding. Format as a JSON array inside a markdown code block: \`\`\`json\n[{"question": "Q1?", "options": ["A", "B", "C", "D"], "answer": "A"}]\n\`\`\`
-
-Do not include any text before or after the JSON blocks.
-
-${fileType === 'pdf' ? `Here is the text:\n---\n${originalTextContext.substring(0, 100000)}` : ''}`;
-                
-                const payloadContent = [{ text: userPrompt }];
-                if (fileType === 'image') {
-                    payloadContent.push({ inlineData: { mimeType: 'image/jpeg', data: fileContent } });
-                }
-
-                const responseText = await callGemini(payloadContent, "Processing document and generating your 50-question quiz... this may take a bit longer.");
-                displayResults(responseText);
-
-            } catch (error) {
-                console.error('Processing error:', error);
-                showError(`An error occurred: ${error.message}`);
-                resetApp();
-            } finally {
-                loadingState.classList.add('hidden');
-            }
-        }
-        
-        async function handleSummaryOptionClick(e) {
-            const level = e.target.dataset.level;
-            document.querySelectorAll('.summary-btn').forEach(btn => btn.classList.remove('active'));
-            e.target.classList.add('active');
-            
-            summaryContentEl.innerHTML = '<div class="text-center p-4">Generating new summary...</div>';
-            
-            const prompt = `Based on the provided document text, generate a ${level} summary. It should be well-structured.
-            
-            Here is the text:\n---\n${originalTextContext.substring(0, 100000)}`;
-
-             try {
-                const newSummary = await callGemini([{ text: prompt }], `Generating ${level} summary...`);
-                populateSummary(newSummary);
-            } catch (error) {
-                console.error('Summary regeneration error:', error);
-                showError(`Could not generate the ${level} summary. Please try again.`);
-                summaryContentEl.innerHTML = '<div class="text-center p-4 text-red-500">Failed to load summary.</div>';
-            }
-        }
-
-        async function extractPdfText(file) {
-            const pdfjsLib = window['pdfjs-dist/build/pdf'];
-            pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js`;
-            const arrayBuffer = await file.arrayBuffer();
-            const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
-            let text = '';
-            for (let i = 1; i <= pdf.numPages; i++) {
-                const page = await pdf.getPage(i);
-                const content = await page.getTextContent();
-                text += content.items.map(item => item.str).join(' ') + '\n';
-            }
-            return text;
-        }
-
-        // --- Gemini API Call ---
-        async function callGemini(parts, message = "Thinking...") {
-            loadingMessage.textContent = message;
-            if (apiKey === 'YOUR_API_KEY_HERE' || !apiKey) {
-                throw new Error("API Key not provided. Please add your Google AI Studio API key to the 'apiKey' variable in the script.");
-            }
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-            const payload = { contents: [{ parts }] };
-
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+            function showPage(pageId) {
+                pages.forEach(page => page.style.display = page.dataset.page === pageId ? 'block' : 'none');
+                navLinks.forEach(link => {
+                    link.classList.toggle('active', link.getAttribute('href') === `#${pageId}`);
                 });
-
-                const responseText = await response.text();
-                if (!responseText) {
-                    throw new Error("Received an empty response from the API. The content may have been blocked due to safety settings.");
-                }
-
-                let result;
-                try {
-                    result = JSON.parse(responseText);
-                } catch (e) {
-                    console.error("Response JSON parse error. Response text:", responseText);
-                    throw new Error("Failed to parse the API response. The format was invalid.");
-                }
-                
-                if (!response.ok) {
-                    const errorMessage = result.error?.message || `API Error: ${response.status}`;
-                    throw new Error(errorMessage);
-                }
-
-                if (result.candidates && result.candidates.length > 0) {
-                    const candidate = result.candidates[0];
-                    if (candidate.finishReason === 'SAFETY') {
-                        throw new Error("The request was blocked for safety reasons. Please try with different content.");
-                    }
-                    if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
-                         throw new Error("The API returned an empty response, which can be due to safety filters on the generated content.");
-                    }
-                    return candidate.content.parts[0].text || '';
-                } else {
-                    const blockReason = result.promptFeedback?.blockReason;
-                    if (blockReason) {
-                        throw new Error(`Your request was blocked by the API. Reason: ${blockReason}. Please modify the uploaded content.`);
-                    }
-                    throw new Error("The API returned a valid response but no content. This might be due to the content filters.");
-                }
-            } catch (error) {
-                console.error("API call failed:", error);
-                throw error; // Re-throw to be caught by the calling function
+                if (pageId === 'app') { mainAppContent.innerHTML = document.getElementById('upload-template').innerHTML; initializeAppEventListeners(); }
             }
-        }
-        
-        // --- Display Logic ---
-        function displayResults(responseText) {
-            try {
-                const jsonRegex = /```json\s*([\s\S]*?)\s*```/g;
-                const matches = [...responseText.matchAll(jsonRegex)];
-                
-                let summaryText = responseText.replace(jsonRegex, '').trim();
-                let flashcards = [], quizData = [];
 
-                if (matches.length > 0) {
-                    try { flashcards = JSON.parse(matches[0][1]); } catch (e) { console.error("Flashcard JSON parse error:", e); }
-                }
-                if (matches.length > 1) {
-                     try { quizData = JSON.parse(matches[1][1]); } catch (e) { console.error("Quiz JSON parse error:", e); }
-                }
-
-                setupTabs(flashcards.length > 0, quizData.length > 0);
-                
-                populateSummary(summaryText);
-                if (flashcards.length > 0) populateFlashcards(flashcards);
-                if (quizData.length > 0) populateQuiz(quizData);
-                setupQA();
-                
-                resultsSection.classList.remove('hidden');
-                
-            } catch (error) {
-                console.error("Display results error:", error);
-                showError("Could not parse the AI's response. Please try again.");
-                resetApp();
-            }
-        }
-        
-        function setupTabs(hasFlashcards, hasQuiz) {
-            const tabs = [ { id: 'summary-content-container', name: 'Summary' }, { id: 'qa-content', name: 'Q&A' } ];
-            if (hasFlashcards) tabs.push({ id: 'flashcards-content', name: 'Flashcards' });
-            if (hasQuiz) tabs.push({ id: 'quiz-content', name: 'Quiz' });
-
-            tabsContainer.innerHTML = tabs.map((tab, i) => `
-                <button data-tab="${tab.id}" class="tab-button ${i === 0 ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-2 border-b-2 font-medium text-base transition-all">
-                    ${tab.name}
-                </button>`).join('');
-
-            document.querySelectorAll('.tab-button').forEach(button => {
-                button.addEventListener('click', (e) => {
-                    document.querySelectorAll('.tab-button').forEach(btn => {
-                        btn.classList.remove('border-indigo-500', 'text-indigo-600');
-                        btn.classList.add('border-transparent', 'text-gray-500');
-                    });
-                    e.currentTarget.classList.add('border-indigo-500', 'text-indigo-600');
-                    e.currentTarget.classList.remove('border-transparent', 'text-gray-500');
-                    document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.add('hidden'));
-                    document.getElementById(e.currentTarget.dataset.tab).classList.remove('hidden');
+            document.querySelectorAll('.nav-button').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const pageId = e.target.getAttribute('href').substring(1);
+                    window.location.hash = pageId;
                 });
             });
-            
-            document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
-            document.getElementById(tabs[0].id).classList.remove('hidden');
-        }
-        
-        function populateSummary(text) {
-            summaryTextForSpeech = text.replace(/#|`/g, ''); // Clean for speech
-            summaryContentEl.innerHTML = markdownConverter.makeHtml(text);
-        }
-        
-        function populateFlashcards(cards) {
-            const grid = document.getElementById('flashcards-grid');
-            grid.innerHTML = cards.map(card => `
-                <div class="flashcard-container h-52">
-                    <div class="flashcard relative w-full h-full cursor-pointer rounded-2xl" onclick="this.classList.toggle('flipped')">
-                        <div class="flashcard-face absolute w-full h-full bg-white flex items-center justify-center p-4 text-center rounded-2xl border border-gray-200"><p class="text-lg font-semibold text-gray-800">${card.term}</p></div>
-                        <div class="flashcard-back absolute w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center p-4 text-center rounded-2xl border border-indigo-400"><p class="text-base text-white font-medium">${card.definition}</p></div>
-                    </div>
-                </div>`).join('');
-        }
 
-        function populateQuiz(questions) {
-            const container = document.getElementById('quiz-container');
-            quizScore = 0;
-            totalQuizQuestions = questions.length;
-            document.getElementById('quiz-score').textContent = `0 / ${totalQuizQuestions}`;
-
-            container.innerHTML = questions.map((q, i) => `
-                <div id="question-${i}" class="p-4 border border-gray-200 rounded-xl bg-white/50">
-                    <p class="font-semibold mb-3 text-gray-800">${i + 1}. ${q.question}</p>
-                    <div class="space-y-2">
-                        ${q.options.map(opt => `
-                            <button class="quiz-option block w-full text-left p-3 border-2 border-gray-200 rounded-lg bg-white hover:bg-indigo-50 hover:border-indigo-300 transition-colors" data-question="${i}" data-answer="${q.answer}">
-                                ${opt}
-                            </button>`).join('')}
-                    </div>
-                </div>`).join('');
-            
-            document.getElementById('quiz-results-container').classList.add('hidden');
-            const submitButton = document.getElementById('submit-quiz-button');
-            if (questions.length > 0) {
-                submitButton.classList.remove('hidden');
-                submitButton.onclick = showQuizResults;
-            } else {
-                submitButton.classList.add('hidden');
+            function handleHashChange() {
+                const pageId = window.location.hash.substring(1) || 'home';
+                showPage(pageId);
             }
-
-            document.querySelectorAll('.quiz-option').forEach(opt => opt.addEventListener('click', checkAnswer));
-        }
-
-        function checkAnswer(e) {
-            const button = e.currentTarget;
-            const questionId = button.dataset.question;
-            const correctAnswer = button.dataset.answer;
-            const selectedAnswer = button.textContent.trim();
-            const questionContainer = document.getElementById(`question-${questionId}`);
-
-            // A simple check to see if the user answered correctly.
-            const isCorrect = selectedAnswer.toLowerCase() === correctAnswer.toLowerCase();
+            window.addEventListener('hashchange', handleHashChange);
             
-            if (isCorrect) {
-                 button.classList.add('correct');
-                 quizScore++;
-            } else {
-                 button.classList.add('incorrect');
-                 // Highlight the correct answer
-                 questionContainer.querySelectorAll('.quiz-option').forEach(opt => {
-                     if (opt.textContent.trim().toLowerCase() === correctAnswer.toLowerCase()) {
-                         opt.classList.add('correct');
-                     }
-                 });
-            }
+            document.getElementById('get-started-button').addEventListener('click', () => { window.location.hash = 'app'; });
+            mobileMenuButton.addEventListener('click', () => mobileMenu.classList.toggle('hidden'));
+
+            const authModal=document.getElementById('auth-modal'),loginButton=document.getElementById('login-button'),signupButton=document.getElementById('signup-button'),closeModal=document.getElementById('close-modal'),showSignup=document.getElementById('show-signup'),showLogin=document.getElementById('show-login'),loginForm=document.getElementById('login-form'),signupForm=document.getElementById('signup-form'),authError=document.getElementById('auth-error'),userSession=document.getElementById('user-session'),authButtons=document.getElementById('auth-buttons'),userEmailDisplay=document.getElementById('user-email');
+            loginButton.onclick=()=>{authModal.style.display='block'};signupButton.onclick=()=>{authModal.style.display='block';loginForm.style.display='none';signupForm.style.display='block'};closeModal.onclick=()=>{authModal.style.display='none'};showSignup.onclick=(e)=>{e.preventDefault();loginForm.style.display='none';signupForm.style.display='block'};showLogin.onclick=(e)=>{e.preventDefault();signupForm.style.display='none';loginForm.style.display='block'};window.onclick=(e)=>{if(e.target==authModal)authModal.style.display='none'};
+            if(window.firebase){window.firebase.onAuthStateChanged(window.auth,user=>{if(user){userSession.classList.remove('hidden');authButtons.classList.add('hidden');userEmailDisplay.textContent=user.email;authModal.style.display='none'}else{userSession.classList.add('hidden');authButtons.classList.remove('hidden');userEmailDisplay.textContent=''}});document.getElementById('signup-submit').addEventListener('click',()=>{const email=document.getElementById('signup-email').value,pass=document.getElementById('signup-password').value;window.firebase.createUserWithEmailAndPassword(window.auth,email,pass).catch(err=>{authError.textContent=err.message})});document.getElementById('login-submit').addEventListener('click',()=>{const email=document.getElementById('login-email').value,pass=document.getElementById('login-password').value;window.firebase.signInWithEmailAndPassword(window.auth,email,pass).catch(err=>{authError.textContent=err.message})});document.getElementById('logout-button').addEventListener('click',()=>window.firebase.signOut(window.auth))};
             
-            document.getElementById('quiz-score').textContent = `${quizScore} / ${totalQuizQuestions}`;
-            // Disable all buttons for this question after an answer is selected
-            questionContainer.querySelectorAll('.quiz-option').forEach(opt => opt.disabled = true);
-        }
-        
-        function showQuizResults() {
-            const resultsContainer = document.getElementById('quiz-results-container');
-            const finalScoreEl = document.getElementById('final-score');
-            const totalQuestionsEl = document.getElementById('total-questions');
-            const percentageEl = document.getElementById('score-percentage');
-            const feedbackEl = document.getElementById('feedback-message');
-            
-            const percentage = totalQuizQuestions > 0 ? Math.round((quizScore / totalQuizQuestions) * 100) : 0;
+            function getApiKey() { return localStorage.getItem('geminiApiKey'); }
+            function saveApiKey(key) { localStorage.setItem('geminiApiKey', key); checkProcessButtonState(); }
+            function checkProcessButtonState() { const btn = document.getElementById('process-button'); if(btn) btn.disabled = !(fileContent && getApiKey()); }
 
-            finalScoreEl.textContent = quizScore;
-            totalQuestionsEl.textContent = totalQuizQuestions;
-            percentageEl.textContent = `${percentage}%`;
-
-            let message = "";
-            if (percentage >= 90) {
-                message = "Excellent work! You've mastered this topic.";
-            } else if (percentage >= 75) {
-                message = "Great job! You have a strong understanding.";
-            } else if (percentage >= 50) {
-                message = "Good effort. A little more review could be helpful.";
-            } else {
-                message = "Keep practicing! Review the material and try the quiz again.";
-            }
-            feedbackEl.textContent = message;
-
-            resultsContainer.classList.remove('hidden');
-            document.getElementById('submit-quiz-button').classList.add('hidden');
-            resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-
-
-        // --- Q&A Logic ---
-        function setupQA() {
-            const chatContainer = document.getElementById('chat-container');
-            const chatInput = document.getElementById('chat-input');
-            const chatSubmit = document.getElementById('chat-submit');
-            
-            chatContainer.innerHTML = '<div class="text-center text-gray-500 p-4">Ask a question about your document to get started.</div>';
-            chatHistory = [];
-
-            const handleChatSubmit = async () => {
-                const question = chatInput.value.trim();
-                if (!question) return;
-
-                addChatMessage('user', question);
-                chatInput.value = '';
-                addChatMessage('assistant', 'Thinking...');
-
-                try {
-                    let context = fileType === 'pdf' && originalTextContext ? `Based on the document text:\n---\n${originalTextContext.substring(0, 50000)}\n---\n` : '';
-                    
-                    const tutorMode = tutorModeSelect.value;
-                    let tutorInstruction = "";
-                    if (tutorMode === 'simple') {
-                        tutorInstruction = "Explain the answer in a very simple and concise way, as if you were talking to a 10-year-old.";
-                    } else if (tutorMode === 'exam') {
-                        tutorInstruction = "Explain the answer in a detailed and structured manner, suitable for someone preparing for an exam. Use bullet points or lists if helpful.";
+            function initializeAppEventListeners() {
+                const dropZone = document.getElementById('drop-zone'), fileInput = document.getElementById('file-input');
+                const apiKeyInput = document.getElementById('api-key-input'), toggleKeyBtn = document.getElementById('toggle-key-visibility');
+                if(dropZone) {
+                    dropZone.onclick = () => fileInput.click();
+                    dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('border-indigo-500', 'bg-indigo-100'); };
+                    dropZone.ondragleave = (e) => { e.preventDefault(); dropZone.classList.remove('border-indigo-500', 'bg-indigo-100'); };
+                    dropZone.ondrop = (e) => { e.preventDefault(); dropZone.classList.remove('border-indigo-500', 'bg-indigo-100'); if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); };
+                    fileInput.onchange = (e) => { if (e.target.files.length) handleFile(e.target.files[0]); };
+                    document.getElementById('process-button').onclick = processFile;
+                    apiKeyInput.onkeyup = () => saveApiKey(apiKeyInput.value);
+                    apiKeyInput.value = getApiKey() || '';
+                    if (toggleKeyBtn) {
+                        toggleKeyBtn.onclick = () => {
+                            const isPassword = apiKeyInput.type === 'password';
+                            apiKeyInput.type = isPassword ? 'text' : 'password';
+                            document.getElementById('eye-open').classList.toggle('hidden', isPassword);
+                            document.getElementById('eye-closed').classList.toggle('hidden', !isPassword);
+                        };
                     }
-
-                    const systemInstruction = `You are a helpful study assistant. ${context} ${tutorInstruction} Answer the user's question concisely based on the document context. If the answer isn't in the context, say that you cannot find the answer in the document.`;
-
-                    const messages = [...chatHistory.slice(-4), { role: 'user', parts: [{ text: question }] }];
-                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-                    const payload = { contents: messages, systemInstruction: { parts: [{ text: systemInstruction }] } };
-
-                    const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                    if (!response.ok) throw new Error('API Error');
-
-                    const result = await response.json();
-                    const answer = result.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not process that.';
-
-                    updateLastAssistantMessage(answer);
-                    chatHistory.push({ role: 'user', parts: [{ text: question }] }, { role: 'assistant', parts: [{ text: answer }] });
-
-                } catch (error) {
-                    console.error('Chat error:', error);
-                    updateLastAssistantMessage('Sorry, an error occurred. Please try again.');
-                }
-            };
-            
-            chatSubmit.onclick = handleChatSubmit;
-            chatInput.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChatSubmit(); } };
-        }
-
-        function addChatMessage(role, text) {
-            const chatContainer = document.getElementById('chat-container');
-            if (chatContainer.querySelector('div.text-center')) chatContainer.innerHTML = '';
-            const messageElement = document.createElement('div');
-            const isUser = role === 'user';
-            messageElement.className = `flex justify-${isUser ? 'end' : 'start'} ${!isUser ? 'assistant-message' : ''}`;
-            
-            const bubbleClasses = isUser 
-                ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white' 
-                : 'bg-white text-gray-800 shadow-sm';
-
-            messageElement.innerHTML = `<div class="${bubbleClasses} rounded-2xl py-2 px-4 max-w-sm prose prose-styles max-w-none">${markdownConverter.makeHtml(text)}</div>`;
-            chatContainer.appendChild(messageElement);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
-
-        function updateLastAssistantMessage(text) {
-            const lastMessage = document.querySelector('.assistant-message:last-child div');
-            if (lastMessage) lastMessage.innerHTML = markdownConverter.makeHtml(text);
-            lastMessage.parentElement.parentElement.scrollTop = lastMessage.parentElement.parentElement.scrollHeight;
-        }
-
-        // --- Speech Synthesis ---
-        function toggleSpeech() {
-            if (speechSynthesis.speaking) {
-                speechSynthesis.cancel();
-                readAloudText.textContent = "Read Aloud";
-            } else {
-                if (summaryTextForSpeech) {
-                    const utterance = new SpeechSynthesisUtterance(summaryTextForSpeech);
-                    utterance.onend = () => readAloudText.textContent = "Read Aloud";
-                    speechSynthesis.speak(utterance);
-                    readAloudText.textContent = "Stop Reading";
                 }
             }
-        }
 
-        // --- Utility Functions ---
-        function resetApp() {
-            speechSynthesis.cancel();
-            uploadSection.classList.remove('hidden');
-            loadingState.classList.add('hidden');
-            resultsSection.classList.add('hidden');
-            resetFileUI();
-            originalTextContext = "";
-            summaryTextForSpeech = "";
-            chatHistory = [];
-        }
+            function handleFile(file) {
+                if (!file) return;
+                const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+                if (!allowedTypes.includes(file.type)) { showError('Invalid file type.'); return; }
+                fileType = file.type === 'application/pdf' ? 'pdf' : 'image';
+                if (fileType === 'image') { const reader = new FileReader(); reader.onload = (e) => fileContent = e.target.result.split(',')[1]; reader.readAsDataURL(file); } else { fileContent = file; }
+                const fileNameDisplay = document.getElementById('file-name');
+                fileNameDisplay.textContent = `Selected: ${file.name}`;
+                fileNameDisplay.classList.remove('hidden');
+                checkProcessButtonState();
+            }
 
-        function showError(message) {
-            errorMessage.textContent = message;
-            errorModal.classList.remove('hidden');
-        }
+            async function processFile() {
+                if (!fileContent) { showError('No file selected.'); return; }
+                document.getElementById('upload-section').style.display = 'none';
+                document.getElementById('loading-state').style.display = 'block';
+                try {
+                    if (fileType === 'pdf') originalTextContext = await extractPdfText(fileContent);
+                    const userPrompt = `You are an expert AI study assistant. Analyze the provided document content. Your tasks are to:
+1. **Generate a medium-length, well-structured summary**. Use headings, bullet points, and bold text.
+2. **Create 5-10 flashcards**. Format as a JSON array inside a markdown code block: \`\`\`json\n[{"term": "A", "definition": "Desc of A"}]\n\`\`\`
+3. **Generate a mind map**. Format as a JSON object inside a markdown code block with a central 'idea' and connected 'children': \`\`\`json\n{"idea": "Central Topic", "children": [{"idea": "Sub-topic 1", "children": []}, {"idea": "Sub-topic 2"}]}\n\`\`\`
+4. **Generate 20 multiple-choice quiz questions**. Format as a JSON array inside a markdown code block: \`\`\`json\n[{"question": "Q1?", "options": ["A", "B", "C", "D"], "answer": "A"}]\n\`\`\`
+Do not include any text before or after the JSON blocks.
+${fileType === 'pdf' ? `Here is the text:\n---\n${originalTextContext.substring(0, 100000)}` : ''}`;
+                    const payloadContent = [{ text: userPrompt }];
+                    if (fileType === 'image') payloadContent.push({ inlineData: { mimeType: 'image/jpeg', data: fileContent } });
+                    const responseText = await callGemini(payloadContent, "Generating your complete study guide...");
+                    displayResults(responseText);
+                } catch (error) { console.error('Processing error:', error); showError(`An error occurred: ${error.message}`); window.location.hash = 'app'; }
+            }
 
+            async function extractPdfText(file) {
+                const pdfjsLib = window['pdfjs-dist/build/pdf'];
+                pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js`;
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument(arrayBuffer).promise; let text = '';
+                for (let i = 1; i <= pdf.numPages; i++) { const page = await pdf.getPage(i); const content = await page.getTextContent(); text += content.items.map(item => item.str).join(' ') + '\n'; }
+                return text;
+            }
+
+            async function callGemini(parts, message = "Thinking...") {
+                const loadingMessage = document.getElementById('loading-message');
+                if(loadingMessage) loadingMessage.textContent = message;
+                const apiKey = getApiKey();
+                if (!apiKey) { throw new Error("Gemini API Key not found. Please add your key on the app page."); }
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                const payload = { contents: [{ parts }] };
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const result = await response.json();
+                if (!response.ok) { throw new Error(result.error?.message || `API Error: ${response.status}`); }
+                if (result.candidates?.[0]?.content?.parts?.[0]?.text) { if (result.candidates[0].finishReason === 'SAFETY') { throw new Error("Request blocked for safety reasons."); } return result.candidates[0].content.parts[0].text; }
+                const blockReason = result.promptFeedback?.blockReason;
+                throw new Error(blockReason ? `Request blocked: ${blockReason}` : "The API returned no content.");
+            }
+
+            function displayResults(responseText) {
+                mainAppContent.innerHTML = document.getElementById('results-template').innerHTML;
+                document.getElementById('start-over-button').onclick = () => { window.location.hash = 'app'; };
+                const jsonRegex = /```json\s*([\s\S]*?)\s*```/g;
+                const matches = [...responseText.matchAll(jsonRegex)];
+                let summaryText = responseText.replace(jsonRegex, '').trim(), flashcards = [], mindMapData = {}, quizData = [];
+                try { flashcards = JSON.parse(matches[0][1]); } catch (e) { console.error("Flashcard JSON parse error", e, matches[0]?.[1]); }
+                try { mindMapData = JSON.parse(matches[1][1]); } catch (e) { console.error("Mind Map JSON parse error", e, matches[1]?.[1]); }
+                try { quizData = JSON.parse(matches[2][1]); } catch (e) { console.error("Quiz JSON parse error", e, matches[2]?.[1]); }
+                setupTabs(summaryText, flashcards, mindMapData, quizData);
+            }
+
+            function setupTabs(summary, flashcards, mindmap, quiz) {
+                const TABS = [{id:'summary',name:'Summary',data:summary,hasData:!!summary,render:renderSummary},{id:'qa',name:'Q&A',data:null,hasData:true,render:renderQA},{id:'flashcards',name:'Flashcards',data:flashcards,hasData:flashcards&&flashcards.length>0,render:renderFlashcards},{id:'mindmap',name:'Mind Map',data:mindmap,hasData:mindmap&&!!mindmap.idea,render:renderMindMap},{id:'quiz',name:'Quiz',data:quiz,hasData:quiz&&quiz.length>0,render:renderQuiz}];
+                const tabsContainer=document.getElementById('tabs'),tabContentContainer=document.getElementById('tab-content'),availableTabs=TABS.filter(t=>t.hasData);
+                tabsContainer.innerHTML=availableTabs.map((tab,i)=>`<button data-tab="${tab.id}" class="tab-button ${i===0?'border-indigo-600 text-indigo-600':'border-transparent text-slate-500'} whitespace-nowrap py-3 px-2 border-b-2 font-medium text-base hover:border-indigo-400 hover:text-indigo-500">${tab.name}</button>`).join('');
+                tabContentContainer.innerHTML=availableTabs.map(tab=>`<div id="${tab.id}-content" class="tab-panel hidden bg-white p-6 rounded-lg shadow-md mt-4"></div>`).join('');
+                document.querySelectorAll('.tab-button').forEach(button=>button.addEventListener('click',e=>{document.querySelectorAll('.tab-button').forEach(btn=>{btn.classList.remove('border-indigo-600','text-indigo-600'); btn.classList.add('border-transparent', 'text-slate-500')});e.currentTarget.classList.add('border-indigo-600','text-indigo-600');e.currentTarget.classList.remove('border-transparent','text-slate-500');document.querySelectorAll('.tab-panel').forEach(panel=>panel.classList.add('hidden'));document.getElementById(`${e.currentTarget.dataset.tab}-content`).classList.remove('hidden')}));
+                availableTabs.forEach((tab,i)=>{const contentEl=document.getElementById(`${tab.id}-content`);if(contentEl){tab.render(contentEl,tab.data);if(i===0)contentEl.classList.remove('hidden')}});
+                document.querySelector('.tab-button')?.classList.add('border-indigo-600','text-indigo-600');
+            }
+
+            function renderSummary(container, data) {
+                 summaryTextForSpeech = data.replace(/#|`/g, '');
+                 container.innerHTML = `<div class="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4"><h3 class="text-xl font-semibold text-gray-800">Smart Summary</h3><div id="summary-options" class="flex items-center gap-2 bg-gray-200 p-1 rounded-lg"><button class="summary-btn px-3 py-1 text-sm font-semibold text-gray-600 rounded-md active" data-level="medium">Medium</button><button class="summary-btn px-3 py-1 text-sm font-semibold text-gray-600 rounded-md" data-level="short">Short</button><button class="summary-btn px-3 py-1 text-sm font-semibold text-gray-600 rounded-md" data-level="detailed">Detailed</button></div><button id="read-aloud-button" class="flex items-center gap-2 bg-indigo-100 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-indigo-200"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg><span id="read-aloud-text">Read Aloud</span></button></div><div id="summary-content-display" class="prose prose-slate max-w-none h-96 overflow-y-auto pr-2">${markdownConverter.makeHtml(data)}</div>`;
+                 document.getElementById('read-aloud-button').onclick = toggleSpeech;
+            }
+            function renderQA(container, data) {
+                 container.innerHTML = `<div class="flex flex-col h-[65vh]"><div class="p-4 border-b border-gray-200"><label for="tutor-mode" class="block text-sm font-medium text-gray-700 mb-1">AI Tutor Mode</label><select id="tutor-mode" class="w-full bg-white border border-gray-300 rounded-lg py-2 px-3"><option value="default">Default Assistant</option><option value="simple">Explain Simply</option><option value="exam">Explain for Exam Prep</option></select></div><div id="chat-container" class="flex-1 overflow-y-auto p-6 space-y-4"><div class="text-center text-gray-500 p-4">Ask a question about your document.</div></div><div class="p-4 border-t"><div class="flex items-center space-x-2"><input type="text" id="chat-input" placeholder="Ask a follow-up..." class="flex-1 w-full px-4 py-2 border rounded-full"><button id="chat-submit" class="text-white rounded-full p-2.5 button-primary"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></button></div></div></div>`;
+                 document.getElementById('chat-submit').onclick = handleChatSubmit;
+                 document.getElementById('chat-input').onkeydown = (e) => { if (e.key === 'Enter') handleChatSubmit(); };
+            }
+            function renderFlashcards(container, data) {
+                container.innerHTML = `<div id="flashcards-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>`;
+                const grid = document.getElementById('flashcards-grid');
+                grid.innerHTML = data.map(card => `<div class="flashcard-container h-52"><div class="flashcard relative w-full h-full cursor-pointer rounded-2xl shadow-md" onclick="this.classList.toggle('flipped')"><div class="flashcard-face absolute w-full h-full bg-white flex items-center justify-center p-4 text-center rounded-2xl border"><p class="text-lg font-semibold">${card.term}</p></div><div class="flashcard-back absolute w-full h-full bg-indigo-600 text-white flex items-center justify-center p-4 text-center rounded-2xl"><p>${card.definition}</p></div></div></div>`).join('');
+            }
+            function renderMindMap(container, data) {
+                container.innerHTML = `<div class="mind-map"></div>`;
+                drawMindMap(container.firstChild, data);
+            }
+            function renderQuiz(container, data) {
+                totalQuizQuestions = data.length; quizScore = 0;
+                container.innerHTML = `<div class="flex justify-between items-center mb-4"><h3 class="text-xl font-semibold">Knowledge Test</h3><div class="font-bold text-indigo-600">Score: <span id="quiz-score">0 / ${totalQuizQuestions}</span></div></div><div id="quiz-container" class="space-y-6 overflow-y-auto max-h-[60vh] pr-2">${data.map((q,i)=>`<div id="question-${i}" class="p-4 border rounded-xl bg-slate-50"><p class="font-semibold mb-3">${i+1}. ${q.question}</p><div class="space-y-2">${q.options.map(opt=>`<button class="quiz-option block w-full text-left p-3 border-2 bg-white rounded-lg hover:bg-indigo-50" data-question="${i}" data-answer="${q.answer}">${opt}</button>`).join('')}</div></div>`).join('')}</div><div id="quiz-results-container" class="text-center p-4 mt-4 bg-indigo-50 rounded-lg hidden"></div><div id="quiz-footer" class="mt-4 text-center pt-4 border-t"><button id="submit-quiz-button" class="text-white font-bold py-3 px-8 rounded-lg button-primary">Finish & See Results</button></div>`;
+                document.querySelectorAll('.quiz-option').forEach(opt => opt.onclick = checkAnswer);
+                document.getElementById('submit-quiz-button').onclick = showQuizResults;
+            }
+
+            async function handleChatSubmit() {
+                 const chatInput = document.getElementById('chat-input');
+                 const question = chatInput.value.trim();
+                 if (!question) return;
+                 addChatMessage('user', question);
+                 chatInput.value = '';
+                 addChatMessage('assistant', '...');
+                 try {
+                     const tutorMode = document.getElementById('tutor-mode').value;
+                     let tutorInstruction = "";
+                     if (tutorMode === 'simple') tutorInstruction = "Explain simply, like I'm 10.";
+                     else if (tutorMode === 'exam') tutorInstruction = "Explain for exam prep, be detailed.";
+                     const prompt = `Based on the document context, ${tutorInstruction}. Answer the user's question: "${question}"\n\nContext:\n${originalTextContext.substring(0, 20000)}`;
+                     const answer = await callGemini([{ text: prompt }], "Getting your answer...");
+                     updateLastAssistantMessage(answer);
+                 } catch (error) {
+                     updateLastAssistantMessage('Sorry, an error occurred.');
+                 }
+            }
+            function addChatMessage(role, text) {
+                 const chatContainer = document.getElementById('chat-container');
+                 if(chatContainer.querySelector('.text-center')) chatContainer.innerHTML = '';
+                 const msg = document.createElement('div');
+                 const isUser = role === 'user';
+                 msg.className = `flex justify-${isUser ? 'end' : 'start'} ${!isUser ? 'assistant-message' : ''}`;
+                 msg.innerHTML = `<div class="max-w-md p-3 rounded-lg ${isUser ? 'bg-indigo-600 text-white' : 'bg-slate-200'}">${markdownConverter.makeHtml(text)}</div>`;
+                 chatContainer.appendChild(msg);
+                 chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+            function updateLastAssistantMessage(text) {
+                 const lastMsg = document.querySelector('.assistant-message:last-child div');
+                 if (lastMsg) lastMsg.innerHTML = markdownConverter.makeHtml(text);
+            }
+            function toggleSpeech() {
+                const readAloudText = document.getElementById('read-aloud-text');
+                if (speechSynthesis.speaking) {
+                    speechSynthesis.cancel();
+                    readAloudText.textContent = "Read Aloud";
+                } else {
+                    if (summaryTextForSpeech) {
+                        const utterance = new SpeechSynthesisUtterance(summaryTextForSpeech);
+                        utterance.onend = () => readAloudText.textContent = "Read Aloud";
+                        speechSynthesis.speak(utterance);
+                        readAloudText.textContent = "Stop Reading";
+                    }
+                }
+            }
+            function checkAnswer(e) {
+                const btn = e.currentTarget;
+                const qId = btn.dataset.question, cAns = btn.dataset.answer, sAns = btn.textContent.trim();
+                const isCorrect = sAns.toLowerCase() === cAns.toLowerCase();
+                const qContainer = document.getElementById(`question-${qId}`);
+                if (isCorrect) { btn.classList.add('correct'); quizScore++; } else { btn.classList.add('incorrect'); }
+                document.getElementById('quiz-score').textContent = `${quizScore} / ${totalQuizQuestions}`;
+                qContainer.querySelectorAll('.quiz-option').forEach(opt => {
+                    opt.disabled = true;
+                    if (opt.textContent.trim().toLowerCase() === cAns.toLowerCase()) opt.classList.add('correct');
+                });
+            }
+            function showQuizResults() {
+                const resultsContainer = document.getElementById('quiz-results-container');
+                const percentage = totalQuizQuestions > 0 ? Math.round((quizScore / totalQuizQuestions) * 100) : 0;
+                let message = "Keep practicing!";
+                if (percentage >= 90) message = "Excellent work!";
+                else if (percentage >= 75) message = "Great job!";
+                else if (percentage >= 50) message = "Good effort!";
+                resultsContainer.innerHTML = `<h4 class="text-xl font-bold text-indigo-700">Quiz Complete!</h4><p class="text-lg mt-2">Final Score: ${quizScore} / ${totalQuizQuestions} (${percentage}%)</p><p class="mt-2 font-medium">${message}</p>`;
+                resultsContainer.classList.remove('hidden');
+                document.getElementById('submit-quiz-button').classList.add('hidden');
+            }
+
+            function drawMindMap(container, data) {
+                const positions = [];
+                function placeNode(node, x, y, parentPos, depth) {
+                    positions.push({x, y});
+                    const el = document.createElement('div'); el.textContent = node.idea; el.className = 'mind-map-node'; el.style.left = `${x}%`; el.style.top = `${y}%`; el.style.borderColor = depth === 0 ? '#4f46e5' : '#fb923c'; el.style.zIndex = 10; container.appendChild(el);
+                    if (parentPos) {
+                       const line = document.createElement('div'); line.className = 'mind-map-line';
+                       const dx = (x - parentPos.x) * container.offsetWidth / 100, dy = (y - parentPos.y) * container.offsetHeight / 100;
+                       const dist = Math.sqrt(dx*dx + dy*dy), angle = Math.atan2(dy, dx);
+                       line.style.width = `${dist}px`; line.style.height = '2px'; line.style.left = `${parentPos.x}%`; line.style.top = `${parentPos.y}%`; line.style.transform = `rotate(${angle}rad)`; container.appendChild(line);
+                    }
+                    if (node.children && node.children.length > 0) {
+                        const angleStep = (Math.PI * 2) / node.children.length;
+                        const radiusX = depth < 1 ? 35 : 15;
+                        const radiusY = depth < 1 ? 25 : 10;
+                        node.children.forEach((child, i) => {
+                            const angle = angleStep * i;
+                            const newX = x + radiusX * Math.cos(angle);
+                            const newY = y + radiusY * Math.sin(angle);
+                            placeNode(child, newX, newY, {x, y}, depth + 1);
+                        });
+                    }
+                }
+                if (data && data.idea) {
+                    placeNode(data, 50, 50, null, 0);
+                }
+            }
+
+            function showError(message) { const modal = document.getElementById('error-modal'); document.getElementById('error-message').textContent = message; modal.style.display = 'block'; document.getElementById('close-error-modal').onclick = () => { modal.style.display = 'none'; }; }
+            
+            handleHashChange(); // Initial page load based on hash
+        });
     </script>
 </body>
 </html>
+
 
